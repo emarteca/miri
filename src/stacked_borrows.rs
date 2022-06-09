@@ -339,8 +339,8 @@ impl<'tcx> Stack {
                 if let Some((tag, alloc_range, offset, _access)) = provoking_access {
                     Err(err_sb_ub(
                         format!(
-                            "not granting access to tag {:?} because incompatible item is protected: {:?}",
-                            tag, item
+                            "not granting access to tag {:?} because incompatible item is protected: {:?} -- accesskind: {:?}",
+                            tag, item, _access
                         ),
                         None,
                         alloc_history.get_logs_relevant_to(

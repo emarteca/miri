@@ -335,7 +335,19 @@ pub fn eval_entry<'tcx>(
             let info = ecx.preprocess_diagnostics();
             match ecx.schedule()? {
                 SchedulingAction::ExecuteStep => {
-                    assert!(ecx.step()?, "a terminated thread was scheduled for execution");
+                    //println!("ree1: {:?}", &info); 
+                    let step = ecx.step();
+                    match step {
+                        Ok(ok_step) => {
+                            assert!(ok_step, "a terminated thread was scheduled for execution");
+                        },
+                        Err(err_step) => {
+                            println!("ERROR STEP: {:?}", err_step);
+                            break;
+                        }
+                    }
+                    //println!("step: {:?}", &step);
+                    //assert!(step, "a terminated thread was scheduled for execution");
                 }
                 SchedulingAction::ExecuteTimeoutCallback => {
                     assert!(
@@ -355,6 +367,7 @@ pub fn eval_entry<'tcx>(
                     break;
                 }
             }
+            //println!("info: {:?}", &info);
             ecx.process_diagnostics(info);
         }
         let return_code = ecx.read_scalar(&ret_place.into())?.to_machine_isize(&ecx)?;

@@ -213,7 +213,7 @@ pub fn report_error<'tcx, 'mir>(
             #[rustfmt::skip]
             let title = match e.kind() {
                 Unsupported(_) =>
-                    "unsupported operation",
+                    "OH SHIT unsupported operation",
                 UndefinedBehavior(_) =>
                     "Undefined Behavior",
                 ResourceExhaustion(_) =>
@@ -377,6 +377,7 @@ pub fn register_diagnostic(e: NonHaltingDiagnostic) {
 
 /// Remember enough about the topmost frame so that we can restore the stack
 /// after a step was taken.
+#[derive(Debug)]
 pub struct TopFrameInfo<'tcx> {
     stack_size: usize,
     instance: Option<ty::Instance<'tcx>>,
