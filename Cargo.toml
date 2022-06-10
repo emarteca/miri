@@ -24,6 +24,7 @@ log = "0.4"
 shell-escape = "0.1.4"
 rand = "0.8"
 smallvec = "1.7"
+libffi = "3.0.0"
 
 # A noop dependency that changes in the Rust repository, it's a bit of a hack.
 # See the `src/tools/rustc-workspace-hack/README.md` file in `rust-lang/rust`

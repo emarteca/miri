@@ -4,3 +4,4 @@ tex/*/out
 *.dot
 *.rs.bk
 .vscode
+*.out

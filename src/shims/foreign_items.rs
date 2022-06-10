@@ -137,7 +137,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
     ) -> InterpResult<'tcx, Option<(&'mir mir::Body<'tcx>, ty::Instance<'tcx>)>> {
         let this = self.eval_context_mut();
         let tcx = this.tcx.tcx;
-
+        //println!("link_name: {:?}", &link_name);
         // If the result was cached, just return it.
         // (Cannot use `or_insert` since the code below might have to throw an error.)
         let entry = this.machine.exported_symbols_cache.entry(link_name);
@@ -216,7 +216,10 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
             }
         };
         match instance {
-            None => Ok(None), // no symbol with this name
+            None => {
+                Ok(None)
+            }
+            , // no symbol with this name
             Some(instance) => Ok(Some((this.load_mir(instance.def, None)?, instance))),
         }
     }
@@ -239,7 +242,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         let this = self.eval_context_mut();
         let link_name = this.item_link_name(def_id);
         let tcx = this.tcx.tcx;
-
+        // println!("REEEE: {:?}", link_name);
         // First: functions that diverge.
         let ret = match ret {
             None =>
@@ -294,7 +297,9 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                         return Ok(None);
                     }
                 },
-            Some(p) => p,
+            Some(p) => {
+                p
+            },
         };
 
         // Second: functions that return.
@@ -309,8 +314,9 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 if let Some(body) = this.lookup_exported_symbol(link_name)? {
                     return Ok(Some(body));
                 }
-
-                this.handle_unsupported(format!("can't call foreign function: {}", link_name))?;
+                //println!("link name: {:?}, args: {:?}, dest: {:?}, ret: {:?}", link_name, args, dest, ret);
+                this.handle_unsupported_c( format!("can't call foreign function: {}", link_name), dest, link_name)?;
+                // this.handle_unsupported(format!("FUNCTIONS THAT RETURN can't call foreign function: {}", link_name))?;
                 return Ok(None);
             }
         }
@@ -362,6 +368,10 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         // Here we dispatch all the shims for foreign functions. If you have a platform specific
         // shim, add it to the corresponding submodule.
         match &*link_name.as_str() {
+            /*"get_num" => {
+                println!("CUSTOM CUSTOM CUSTOMMMMMMMMM");
+                this.write_null(dest)?;
+            },*/
             // Miri-specific extern functions
             "miri_static_root" => {
                 let [ptr] = this.check_shim(abi, Abi::Rust, link_name, args)?;

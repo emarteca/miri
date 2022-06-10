@@ -735,6 +735,48 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         })
     }
 
+    fn handle_unsupported_c<S: AsRef<str>>(&mut self, error_msg: S, 
+        dest: &PlaceTy<'tcx, Tag>, link_name: Symbol) -> InterpResult<'tcx, ()> {
+
+        use libffi::high::call::*;
+
+        let this = self.eval_context_mut();
+
+        // extern "C" fn get_num() -> f32 {
+        //         return 2.0;
+        // }
+
+            
+        let C_funct:  unsafe extern "C"  fn() -> f32; 
+        
+        extern "C" fn get_num() -> f32 {
+                return 2.0;
+        }
+
+        C_funct = get_num;
+
+        this.machine.add_extern_c_fct_defn(link_name, C_funct)?;
+
+        // call function if it exists, if not throw unsupported
+        match this.machine.get_extern_c_fct_defn(link_name) {
+            Some(fct_ptr) => {
+                unsafe {
+                    let x = call::<f32>(CodePtr(*fct_ptr as *mut _), &[]);
+                    println!("x: {:?}", x);
+                }
+                // TODO! actually do something with the result here
+                // Ok(())
+                throw_unsup_format!("WOOP {}", error_msg.as_ref());
+            },
+            None => {
+                throw_unsup_format!("{}", error_msg.as_ref());
+            }
+        }
+
+        // this.write_null(dest)?;
+        // Ok(())
+    }
+
     /// Handler that should be called when unsupported functionality is encountered.
     /// This function will either panic within the context of the emulated application
     /// or return an error in the Miri process context

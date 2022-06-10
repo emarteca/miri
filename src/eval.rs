@@ -336,8 +336,8 @@ pub fn eval_entry<'tcx>(
             match ecx.schedule()? {
                 SchedulingAction::ExecuteStep => {
                     //println!("ree1: {:?}", &info); 
-                    let step = ecx.step();
-                    match step {
+                    let step = ecx.step()?;
+                    /*match step {
                         Ok(ok_step) => {
                             assert!(ok_step, "a terminated thread was scheduled for execution");
                         },
@@ -345,9 +345,9 @@ pub fn eval_entry<'tcx>(
                             println!("ERROR STEP: {:?}", err_step);
                             break;
                         }
-                    }
+                    }*/
                     //println!("step: {:?}", &step);
-                    //assert!(step, "a terminated thread was scheduled for execution");
+                    assert!(step, "a terminated thread was scheduled for execution");
                 }
                 SchedulingAction::ExecuteTimeoutCallback => {
                     assert!(
@@ -431,7 +431,7 @@ where
         let arg0 = if let Some(arg0) = args.next() {
             arg0
         } else {
-            return vec![0];
+            return vec![0]; 
         };
         let arg0 = arg0.as_ref();
         if arg0.contains('"') {

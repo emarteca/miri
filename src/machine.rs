@@ -336,6 +336,8 @@ pub struct Evaluator<'mir, 'tcx> {
 
     /// The probability of the active thread being preempted at the end of each basic block.
     pub(crate) preemption_rate: f64,
+
+    pub extern_c_fct_definitions: FxHashMap< Symbol, unsafe extern "C"  fn() -> f32>,
 }
 
 impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
@@ -393,7 +395,20 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
             mute_stdout_stderr: config.mute_stdout_stderr,
             weak_memory: config.weak_memory_emulation,
             preemption_rate: config.preemption_rate,
+            extern_c_fct_definitions: FxHashMap::default(),
         }
+    }
+
+    pub fn add_extern_c_fct_defn(&mut self, link_name: Symbol, 
+        fct_ptr: unsafe extern "C"  fn() -> f32) -> InterpResult<'tcx> {
+        
+            println!("REEEEEEEE");
+        self.extern_c_fct_definitions.try_insert(link_name, fct_ptr).unwrap();
+        Ok(())
+    }
+
+    pub fn get_extern_c_fct_defn(&self, link_name: Symbol) -> Option<&unsafe extern "C"  fn() -> f32>{
+        self.extern_c_fct_definitions.get(&link_name)
     }
 
     pub(crate) fn late_init(

@@ -51,6 +51,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
             // to run extra MIR), and Ok(Some(body)) if we found MIR to run for the
             // foreign function
             // Any needed call to `goto_block` will be performed by `emulate_foreign_item`.
+            //println!("here!");
             return this.emulate_foreign_item(instance.def_id(), abi, args, dest, ret, unwind);
         }
 

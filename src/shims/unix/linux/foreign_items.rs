@@ -207,6 +207,11 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 this.write_null(dest)?;
             }
 
+            /*_ => {
+                println!("NEVER CRASH");
+                 this.write_null(dest)?;
+            }*/
+
             _ => return Ok(EmulateByNameResult::NotSupported),
         };
 
