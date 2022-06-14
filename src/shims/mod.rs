@@ -22,7 +22,7 @@ use crate::*;
 use helpers::check_arg_count;
 
 impl<'mir, 'tcx: 'mir> EvalContextExt<'mir, 'tcx> for crate::MiriEvalContext<'mir, 'tcx> {}
-pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx> {
+pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx> + helpers::EvalContextExt<'mir, 'tcx> {
     fn find_mir_or_eval_fn(
         &mut self,
         instance: ty::Instance<'tcx>,
@@ -51,12 +51,13 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
             // to run extra MIR), and Ok(Some(body)) if we found MIR to run for the
             // foreign function
             // Any needed call to `goto_block` will be performed by `emulate_foreign_item`.
-            //println!("here!");
             return this.emulate_foreign_item(instance.def_id(), abi, args, dest, ret, unwind);
         }
 
+        let result = Ok(Some((&*this.load_mir(instance.def, None)?, instance)));
+        
         // Otherwise, load the MIR.
-        Ok(Some((&*this.load_mir(instance.def, None)?, instance)))
+        result
     }
 
     /// Returns `true` if the computation was performed, and `false` if we should just evaluate

@@ -340,6 +340,11 @@ pub struct Evaluator<'mir, 'tcx> {
     pub extern_c_fct_definitions: FxHashMap< Symbol, unsafe extern "C"  fn() -> f32>,
 }
 
+// TODO ellen! make this try_into an extern signature so it autocasts
+pub trait ExternCFunction<ArgType, RetType> {
+    fn function_ptr(&self) -> unsafe extern "C" fn(ArgType) -> RetType;
+}
+
 impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
     pub(crate) fn new(config: &MiriConfig, layout_cx: LayoutCx<'tcx, TyCtxt<'tcx>>) -> Self {
         let local_crates = helpers::get_local_crates(layout_cx.tcx);
@@ -402,7 +407,6 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
     pub fn add_extern_c_fct_defn(&mut self, link_name: Symbol, 
         fct_ptr: unsafe extern "C"  fn() -> f32) -> InterpResult<'tcx> {
         
-            println!("REEEEEEEE");
         self.extern_c_fct_definitions.try_insert(link_name, fct_ptr).unwrap();
         Ok(())
     }

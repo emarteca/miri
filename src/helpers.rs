@@ -735,18 +735,10 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         })
     }
 
-    fn handle_unsupported_c<S: AsRef<str>>(&mut self, error_msg: S, 
-        dest: &PlaceTy<'tcx, Tag>, link_name: Symbol) -> InterpResult<'tcx, ()> {
-
-        use libffi::high::call::*;
-
+    // TODO ellen! args, no placeholder
+    fn add_extern_function_to_context(&mut self, link_name: Symbol) -> InterpResult<'tcx, ()> {
         let this = self.eval_context_mut();
 
-        // extern "C" fn get_num() -> f32 {
-        //         return 2.0;
-        // }
-
-            
         let C_funct:  unsafe extern "C"  fn() -> f32; 
         
         extern "C" fn get_num() -> f32 {
@@ -756,6 +748,17 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         C_funct = get_num;
 
         this.machine.add_extern_c_fct_defn(link_name, C_funct)?;
+        Ok(())
+    }
+
+    fn handle_unsupported_c<S: AsRef<str>>(&mut self, error_msg: S, 
+        dest: &PlaceTy<'tcx, Tag>, link_name: Symbol,  args: &[OpTy<'tcx, Tag>]) -> InterpResult<'tcx, ()> {
+
+        self.add_extern_function_to_context(link_name)?;
+
+        use libffi::high::call::*;
+
+        let this = self.eval_context_mut();
 
         // call function if it exists, if not throw unsupported
         match this.machine.get_extern_c_fct_defn(link_name) {
@@ -764,7 +767,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     let x = call::<f32>(CodePtr(*fct_ptr as *mut _), &[]);
                     println!("x: {:?}", x);
                 }
-                // TODO! actually do something with the result here
+                // TODO ellen! actually do something with the result here
                 // Ok(())
                 throw_unsup_format!("WOOP {}", error_msg.as_ref());
             },
@@ -782,7 +785,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
     /// or return an error in the Miri process context
     ///
     /// Return value of `Ok(bool)` indicates whether execution should continue.
-    fn handle_unsupported<S: AsRef<str>>(&mut self, error_msg: S) -> InterpResult<'tcx, ()> {
+    fn handle_unsupported<S: AsRef<str>>(&mut self, error_msg: S, ) -> InterpResult<'tcx, ()> {
         let this = self.eval_context_mut();
         if this.machine.panic_on_unsupported {
             // message is slightly different here to make automated analysis easier
@@ -839,6 +842,81 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
             None => tcx.item_name(def_id),
         }
     }
+
+    // for diagnostics: visit and print info about a node
+    fn visit_and_print(&self, v: &OpTy<'tcx, Tag>) -> InterpResult<'tcx> {
+        let this = self.eval_context_ref();
+
+        use rustc_target::abi::VariantIdx;
+
+        struct DiagnosticNodeVisitor<'ecx, 'mir, 'tcx>
+        {
+            ecx: &'ecx MiriEvalContext<'mir, 'tcx>,
+        }
+
+        impl<'ecx, 'mir, 'tcx> ValueVisitor<'mir, 'tcx, Evaluator<'mir, 'tcx>>
+            for DiagnosticNodeVisitor<'ecx, 'mir, 'tcx> 
+        {
+            type V = OpTy<'tcx, Tag>;
+
+            #[inline(always)]
+            fn ecx(&self) -> &MiriEvalContext<'mir, 'tcx> {
+                self.ecx
+            }
+
+            fn visit_value(&mut self, v: &Self::V) -> InterpResult<'tcx> {
+                println!("VALUE: {:?}", v);
+                self.walk_value(v)
+            }
+
+            fn visit_aggregate(
+                &mut self,
+                v: &Self::V,
+                fields: impl Iterator<Item = InterpResult<'tcx, Self::V>>,
+            ) -> InterpResult<'tcx> {
+                println!("AGGREGATE!");
+                self.walk_aggregate(v, fields)
+            }
+
+            fn visit_variant(
+                &mut self,
+                _old_val: &Self::V,
+                _variant: VariantIdx,
+                new_val: &Self::V,
+            ) -> InterpResult<'tcx> {
+                println!("VARIANT!");
+                self.visit_value(new_val)
+            }
+
+            fn visit_field(
+                &mut self,
+                _old_val: &Self::V,
+                _field: usize,
+                new_val: &Self::V,
+            ) -> InterpResult<'tcx> {
+                println!("FIELD!");
+                self.visit_value(new_val)
+            }
+
+            fn visit_union(&mut self, _v: &Self::V, _fields: NonZeroUsize) -> InterpResult<'tcx>
+            {
+                println!("UNION!");
+                Ok(())
+            }
+            
+        }
+
+        // Run a visitor
+        {
+            let mut visitor = DiagnosticNodeVisitor {
+                ecx: this,
+            };
+    
+            visitor.visit_value(&v)?;
+        }
+        Ok(())
+    }
+
 }
 
 impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
@@ -925,3 +1003,4 @@ impl std::fmt::Display for HexRange {
         write!(f, "[{:#x}..{:#x}]", self.0.start.bytes(), self.0.end().bytes())
     }
 }
+
