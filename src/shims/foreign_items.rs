@@ -45,11 +45,34 @@ pub enum EmulateByNameResult<'mir, 'tcx> {
     NotSupported,
 }
 
+#[derive(Debug)]
 pub struct ExternalCFuncDeclRep<'hir> {
     pub link_name: Symbol,
     pub inputs_types: &'hir [Ty<'hir>],
     pub output_type: &'hir FnRetTy<'hir>,
 }
+
+#[derive(Debug, Clone)]
+pub enum CArg {
+    INVALID,
+    Int32(i32),
+}
+
+
+// impl<'a> TryInto<libffi::high::Arg<'a>> for CArg<'a> {
+//     type Error = ();
+
+//     fn try_into(self) -> Result<libffi::high::Arg<'a>, Self::Error> {
+//         match self {
+//             CArg::Int32(v) => {
+//                 Ok(libffi::high::arg(*v))
+//             },
+//             _ => {
+//                 Err(())
+//             }
+//         }
+//     }
+// }
 
 impl<'hir> ExternalCFuncDeclRep<'hir> {
     pub fn from_hir_node(node: &Node<'hir>, link_name: Symbol) -> Option<Self> {

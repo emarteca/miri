@@ -303,6 +303,7 @@ fn main() {
 
     // If user has explicitly enabled/disabled isolation
     let mut isolation_enabled: Option<bool> = None;
+
     for arg in env::args() {
         if rustc_args.is_empty() {
             // Very first arg: binary name.
@@ -469,6 +470,13 @@ fn main() {
                 "full" => BacktraceStyle::Full,
                 _ => panic!("-Zmiri-backtrace may only be 0, 1, or full"),
             };
+        } else if let Some(param) = arg.strip_prefix("-Zmiri-external_c_so_file=") {
+            let filename = param.to_string();
+            if std::path::Path::new(&filename).exists() {
+                miri_config.external_c_so_file = Some(filename);
+            } else {
+                panic!("-Zmiri-external_c_so_file requires a valid path to a file");
+            }
         } else {
             // Forward to rustc.
             rustc_args.push(arg);

@@ -339,7 +339,10 @@ pub struct Evaluator<'mir, 'tcx> {
     /// The probability of the active thread being preempted at the end of each basic block.
     pub(crate) preemption_rate: f64,
 
+    /// map of C function names to corresponding code pointers 
     pub extern_c_fct_definitions: FxHashMap< Symbol, CodePtr>,
+
+    pub external_c_so_file: Option<String>,
 }
 
 // TODO ellen! make this try_into an extern signature so it autocasts
@@ -403,6 +406,7 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
             weak_memory: config.weak_memory_emulation,
             preemption_rate: config.preemption_rate,
             extern_c_fct_definitions: FxHashMap::default(),
+            external_c_so_file: config.external_c_so_file.clone(),
         }
     }
 

@@ -23,7 +23,7 @@ use rustc_target::spec::abi::Abi;
 use rand::RngCore;
 
 use crate::*;
-use crate::shims::foreign_items::ExternalCFuncDeclRep;
+use crate::shims::foreign_items::{ExternalCFuncDeclRep, CArg};
 
 use libffi::{high::call::*, low::CodePtr};
 
@@ -770,7 +770,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         use std::ops::Deref;
 
         unsafe {
-            let lib = libloading::Library::new("ffi_tests/src/libtestlib.so").unwrap();
+            let lib = libloading::Library::new(this.machine.external_c_so_file.as_ref().unwrap()).unwrap();
             let func: libloading::Symbol<unsafe extern fn()> = lib.get(link_name.as_str().as_bytes()).unwrap();
             let ptr = CodePtr(*func.deref() as *mut _);
             match external_fct_defn.output_type {
@@ -782,9 +782,8 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                         ), ..
                 }) => {
                     // TODO ellen! deal with the args, try and get the actual values
-                    let mut libffi_args = Vec::with_capacity(args.len());
-                    let mut my_ref: dyn libffi::high::CType;
-                    for (cur_arg, arg_type) in args.iter().zip(external_fct_defn.inputs_types.iter()) {
+                    // let mut libffi_args = Vec::<Box<dyn Any>>::with_capacity(args.len());
+                    let libffi_args = args.iter().zip(external_fct_defn.inputs_types.iter()).map(|(cur_arg, arg_type)|  {
                         println!("ARGGGG: {:?}", cur_arg);
                         match this.read_scalar(cur_arg) {
                             Ok(k) => {
@@ -797,16 +796,19 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                                                 res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
                                             ), ..
                                     }) => {
-                                        let my_ref = v;
-                                        libffi_args.push(arg(&my_ref));
+                                        CArg::Int32(v)
                                     },
-                                    _ => {}
+                                    _ => {
+                                        CArg::INVALID
+                                    }
                                 }
                             },
-                            _ => {}
+                            _ => {
+                                CArg::INVALID
+                            }
                         }
-                    }
-                    println!("libffi_args: {:?}", libffi_args);
+                    }).collect::<Vec<CArg>>(); 
+
                     let x = call::<i32>(ptr, &[]);
                     this.write_int(x, dest)?;
                     println!("REEE: {:?}", x);

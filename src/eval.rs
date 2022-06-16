@@ -124,6 +124,9 @@ pub struct MiriConfig {
     pub mute_stdout_stderr: bool,
     /// The probability of the active thread being preempted at the end of each basic block.
     pub preemption_rate: f64,
+    /// the location of a shared object file to load when calling external C functions
+    /// TODO ellen! this is a hacky temp solution
+    pub external_c_so_file: Option<String>,
 }
 
 impl Default for MiriConfig {
@@ -154,6 +157,7 @@ impl Default for MiriConfig {
             provenance_mode: ProvenanceMode::Legacy,
             mute_stdout_stderr: false,
             preemption_rate: 0.01, // 1%
+            external_c_so_file: None,
         }
     }
 }
