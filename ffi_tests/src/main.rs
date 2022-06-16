@@ -1,5 +1,5 @@
 extern "C" {
-        fn get_num() -> i32;
+        fn get_num(x: i32) -> i32;
         fn printer(x: i32) -> i32;
 }
 
@@ -10,7 +10,7 @@ fn main() {
         unsafe {
                     //println!("{}", get_num());
 //                    printer(x);
-                    x = get_num();
+                    x = get_num(1);
                     println!("{}", x);
         }
         println!("x: {:?}", x);

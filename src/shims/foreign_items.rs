@@ -70,7 +70,7 @@ impl<'hir> ExternalCFuncDeclRep<'hir> {
                 // we care about the inputs (args) and output (return type)
                 
                 // first, deal with the input types
-                println!("HELLO FOREIGN FCT: {:?}, {:?}", inputs, output); 
+                println!("HELLO FOREIGN FCT: {:?}, {:?}\n\n", inputs, output); 
                 Some(
                     Self {
                         link_name,

@@ -741,8 +741,29 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         })
     }
 
-    // TODO ellen! args, no placeholder
-    fn call_and_add_external_C_fct_to_context(&mut self, external_fct_defn: ExternalCFuncDeclRep, dest: &PlaceTy<'tcx, Tag>) -> InterpResult<'tcx, ()> {
+    // TODO ellen! make this return a result if it can't add to arglist properly
+    // UGH TYPE ERRORS
+    // specifically, problems with adding to the array of args because it's a list of references
+    // fn get_arg_for_type<TagType: Provenance>(s: &ScalarMaybeUninit<TagType>, s_typ: &hir::Ty<'tcx>) -> Option<>{
+    //     // TODO ellen! hideous code, should use matches! or ifs probably
+    //     match (s.to_i32(), s_typ) {
+    //         (Ok(v), &hir::Ty{
+    //             hir_id:_, kind: hir::TyKind::Path(
+    //                 hir::QPath::Resolved(_, hir::Path { 
+    //                     span: _, 
+    //                     res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
+    //                 ), ..
+    //         }) => {
+    //             // libffi_arglist.push(arg(&v));
+    //             return Some(v)
+    //         },
+    //         _ => {}
+    //     }
+    //     None
+    // }
+
+    fn call_and_add_external_C_fct_to_context(&mut self, 
+        external_fct_defn: ExternalCFuncDeclRep<'tcx>, dest: &PlaceTy<'tcx, Tag>, args: &[OpTy<'tcx, Tag>]) -> InterpResult<'tcx, ()> {
         let this = self.eval_context_mut();
 
         let link_name = external_fct_defn.link_name;
@@ -760,6 +781,32 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                             res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
                         ), ..
                 }) => {
+                    // TODO ellen! deal with the args, try and get the actual values
+                    let mut libffi_args = Vec::with_capacity(args.len());
+                    let mut my_ref: dyn libffi::high::CType;
+                    for (cur_arg, arg_type) in args.iter().zip(external_fct_defn.inputs_types.iter()) {
+                        println!("ARGGGG: {:?}", cur_arg);
+                        match this.read_scalar(cur_arg) {
+                            Ok(k) => {
+                                // let libffi_arg = Self::get_arg_for_type::<machine::Tag>(&k, arg_type);
+                                match (k.to_i32(), arg_type) {
+                                    (Ok(v), &hir::Ty{
+                                        hir_id:_, kind: hir::TyKind::Path(
+                                            hir::QPath::Resolved(_, hir::Path { 
+                                                span: _, 
+                                                res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
+                                            ), ..
+                                    }) => {
+                                        let my_ref = v;
+                                        libffi_args.push(arg(&my_ref));
+                                    },
+                                    _ => {}
+                                }
+                            },
+                            _ => {}
+                        }
+                    }
+                    println!("libffi_args: {:?}", libffi_args);
                     let x = call::<i32>(ptr, &[]);
                     this.write_int(x, dest)?;
                     println!("REEE: {:?}", x);
@@ -802,12 +849,13 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         Ok(())
     }
 
+    // TODO ellen! get rid of this function, it just immediately dispatches to call_and_add
     fn handle_unsupported_c<S: AsRef<str>>(&mut self, error_msg: S, 
-        dest: &PlaceTy<'tcx, Tag>, external_fct_defn: ExternalCFuncDeclRep,  args: &[OpTy<'tcx, Tag>]) -> InterpResult<'tcx, ()> {
+        dest: &PlaceTy<'tcx, Tag>, external_fct_defn: ExternalCFuncDeclRep<'tcx>,  args: &[OpTy<'tcx, Tag>]) -> InterpResult<'tcx, ()> {
 
         // let link_name = external_fct_defn.link_name;
 
-        self.call_and_add_external_C_fct_to_context(external_fct_defn, dest)?;
+        self.call_and_add_external_C_fct_to_context(external_fct_defn, dest, args)?;
 
         // use libffi::{ffi_call, high::call::*};
 

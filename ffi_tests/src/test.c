@@ -1,7 +1,7 @@
 #include <stdio.h>
 
-int get_num() {
-  return 2;
+int get_num(int x) {
+  return 2 + x;
 }
 
 void printer() {
