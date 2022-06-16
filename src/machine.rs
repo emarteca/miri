@@ -34,6 +34,8 @@ use crate::{
     *,
 };
 
+use libffi::low::CodePtr;
+
 // Some global facts about the emulated machine.
 pub const PAGE_SIZE: u64 = 4 * 1024; // FIXME: adjust to target architecture
 pub const STACK_ADDR: u64 = 32 * PAGE_SIZE; // not really about the "stack", but where we start assigning integer addresses to allocations
@@ -337,7 +339,7 @@ pub struct Evaluator<'mir, 'tcx> {
     /// The probability of the active thread being preempted at the end of each basic block.
     pub(crate) preemption_rate: f64,
 
-    pub extern_c_fct_definitions: FxHashMap< Symbol, unsafe extern "C"  fn() -> f32>,
+    pub extern_c_fct_definitions: FxHashMap< Symbol, CodePtr>,
 }
 
 // TODO ellen! make this try_into an extern signature so it autocasts
@@ -405,13 +407,13 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
     }
 
     pub fn add_extern_c_fct_defn(&mut self, link_name: Symbol, 
-        fct_ptr: unsafe extern "C"  fn() -> f32) -> InterpResult<'tcx> {
+        fct_ptr: CodePtr) -> InterpResult<'tcx> {
         
         self.extern_c_fct_definitions.try_insert(link_name, fct_ptr).unwrap();
         Ok(())
     }
 
-    pub fn get_extern_c_fct_defn(&self, link_name: Symbol) -> Option<&unsafe extern "C"  fn() -> f32>{
+    pub fn get_extern_c_fct_defn(&self, link_name: Symbol) -> Option<&CodePtr>{
         self.extern_c_fct_definitions.get(&link_name)
     }
 

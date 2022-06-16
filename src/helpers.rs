@@ -3,10 +3,13 @@ pub mod convert;
 use std::mem;
 use std::num::NonZeroUsize;
 use std::time::Duration;
+use std::any::Any;
 
 use log::trace;
 
+use rustc_ast::{IntTy};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
+use rustc_hir::{self as hir};
 use rustc_middle::mir;
 use rustc_middle::ty::{
     self,
@@ -20,6 +23,9 @@ use rustc_target::spec::abi::Abi;
 use rand::RngCore;
 
 use crate::*;
+use crate::shims::foreign_items::ExternalCFuncDeclRep;
+
+use libffi::{high::call::*, low::CodePtr};
 
 impl<'mir, 'tcx: 'mir> EvalContextExt<'mir, 'tcx> for crate::MiriEvalContext<'mir, 'tcx> {}
 
@@ -736,45 +742,93 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
     }
 
     // TODO ellen! args, no placeholder
-    fn add_extern_function_to_context(&mut self, link_name: Symbol) -> InterpResult<'tcx, ()> {
+    fn call_and_add_external_C_fct_to_context(&mut self, external_fct_defn: ExternalCFuncDeclRep, dest: &PlaceTy<'tcx, Tag>) -> InterpResult<'tcx, ()> {
         let this = self.eval_context_mut();
 
-        let C_funct:  unsafe extern "C"  fn() -> f32; 
-        
-        extern "C" fn get_num() -> f32 {
-                return 2.0;
+        let link_name = external_fct_defn.link_name;
+        use std::ops::Deref;
+
+        unsafe {
+            let lib = libloading::Library::new("ffi_tests/src/libtestlib.so").unwrap();
+            let func: libloading::Symbol<unsafe extern fn()> = lib.get(link_name.as_str().as_bytes()).unwrap();
+            let ptr = CodePtr(*func.deref() as *mut _);
+            match external_fct_defn.output_type {
+                hir::FnRetTy::Return(&hir::Ty{
+                    hir_id:_, kind: hir::TyKind::Path(
+                        hir::QPath::Resolved(_, hir::Path { 
+                            span: _, 
+                            res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
+                        ), ..
+                }) => {
+                    let x = call::<i32>(ptr, &[]);
+                    this.write_int(x, dest)?;
+                    println!("REEE: {:?}", x);
+                    return Ok(());
+                },
+                hir::FnRetTy::DefaultReturn(_) => {
+                    println!("NOT SUPPORTING DEFAULT (i.e. void) RETURN TYPE YET");
+                },
+                _ => {
+                    println!("UNSUPPORTED RETURN TYPE -- NOT VOID");
+                }
+            }
         }
 
-        C_funct = get_num;
+        // TODO don't reload the function every time
+        // but it seems the pointer does not persist across the unsafe boundary? 
 
-        this.machine.add_extern_c_fct_defn(link_name, C_funct)?;
+        // let code_ptr: CodePtr;
+        // match this.machine.get_extern_c_fct_defn(link_name) {
+        //     Some(ptr) => {
+        //         code_ptr = *ptr;
+        //     },
+        //     None => {
+        //         unsafe {
+        //             let lib = libloading::Library::new("ffi_tests/src/libtestlib.so").unwrap();
+        //             let func: libloading::Symbol<unsafe extern fn()> = lib.get(link_name.as_str().as_bytes()).unwrap();
+        //             let ptr = CodePtr(*func.deref() as *mut _);
+        //             // let x = call::<i32>(ptr, &[]);
+        //             // println!("REEE: {:?}", x);
+        //             code_ptr = ptr;
+        //         }
+        //     }
+        // };
+        // unsafe {
+        //     let x = call::<i32>(code_ptr, &[]);
+        //     println!("OMGGGG: {:?}", x);
+        // }
+
+        // this.machine.add_extern_c_fct_defn(external_fct_defn.link_name, code_ptr)?;
         Ok(())
     }
 
     fn handle_unsupported_c<S: AsRef<str>>(&mut self, error_msg: S, 
-        dest: &PlaceTy<'tcx, Tag>, link_name: Symbol,  args: &[OpTy<'tcx, Tag>]) -> InterpResult<'tcx, ()> {
+        dest: &PlaceTy<'tcx, Tag>, external_fct_defn: ExternalCFuncDeclRep,  args: &[OpTy<'tcx, Tag>]) -> InterpResult<'tcx, ()> {
 
-        self.add_extern_function_to_context(link_name)?;
+        // let link_name = external_fct_defn.link_name;
 
-        use libffi::high::call::*;
+        self.call_and_add_external_C_fct_to_context(external_fct_defn, dest)?;
 
-        let this = self.eval_context_mut();
+        // use libffi::{ffi_call, high::call::*};
+
+        // let this = self.eval_context_mut();
 
         // call function if it exists, if not throw unsupported
-        match this.machine.get_extern_c_fct_defn(link_name) {
-            Some(fct_ptr) => {
-                unsafe {
-                    let x = call::<f32>(CodePtr(*fct_ptr as *mut _), &[]);
-                    println!("x: {:?}", x);
-                }
-                // TODO ellen! actually do something with the result here
-                // Ok(())
-                throw_unsup_format!("WOOP {}", error_msg.as_ref());
-            },
-            None => {
-                throw_unsup_format!("{}", error_msg.as_ref());
-            }
-        }
+        // match this.machine.get_extern_c_fct_defn(link_name) {
+        //     Some(fct_ptr) => {
+        //         unsafe {
+        //             let x = call::<f32>(CodePtr(*fct_ptr as *mut _), &[]);
+        //             println!("x: {:?}", x);
+        //         }
+        //         // TODO ellen! actually do something with the result here
+        //         // Ok(())
+        //         throw_unsup_format!("WOOP {}", error_msg.as_ref());
+        //     },
+        //     None => {
+        //         throw_unsup_format!("{}", error_msg.as_ref());
+        //     }
+        // }
+        throw_unsup_format!("{}", error_msg.as_ref());
 
         // this.write_null(dest)?;
         // Ok(())

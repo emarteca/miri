@@ -3,10 +3,16 @@ use std::{collections::hash_map::Entry, iter};
 use log::trace;
 
 use rustc_apfloat::Float;
-use rustc_ast::expand::allocator::AllocatorKind;
+use rustc_ast::{
+    expand::allocator::AllocatorKind,
+};
 use rustc_hir::{
+    self as hir,
     def::DefKind,
-    def_id::{CrateNum, DefId, LOCAL_CRATE},
+    def_id::{CrateNum, DefId, LOCAL_CRATE, LocalDefId},
+    Node,
+    Ty,
+    FnRetTy,
 };
 use rustc_middle::middle::{
     codegen_fn_attrs::CodegenFnAttrFlags, dependency_format::Linkage,
@@ -22,7 +28,9 @@ use rustc_target::{
 };
 
 use super::backtrace::EvalContextExt as _;
-use crate::helpers::convert::Truncate;
+use crate::helpers::{
+    convert::Truncate
+};
 use crate::*;
 
 /// Returned by `emulate_foreign_item_by_name`.
@@ -35,6 +43,45 @@ pub enum EmulateByNameResult<'mir, 'tcx> {
     MirBody(&'mir mir::Body<'tcx>, ty::Instance<'tcx>),
     /// The item is not supported.
     NotSupported,
+}
+
+pub struct ExternalCFuncDeclRep<'hir> {
+    pub link_name: Symbol,
+    pub inputs_types: &'hir [Ty<'hir>],
+    pub output_type: &'hir FnRetTy<'hir>,
+}
+
+impl<'hir> ExternalCFuncDeclRep<'hir> {
+    pub fn from_hir_node(node: &Node<'hir>, link_name: Symbol) -> Option<Self> {
+        match node {
+            // calls to foreign functions
+            Node::ForeignItem(&hir::ForeignItem { 
+                ident, 
+                kind: hir::ForeignItemKind::Fn(&hir::FnDecl{
+                    inputs,
+                    ref output, 
+                    ..
+                },..), 
+                def_id, 
+                span, 
+                vis_span 
+            }) => { 
+                // kind: Fn(&'hir FnDecl<'hir>, &'hir [Ident], &'hir Generics<'hir>)
+                // we care about the inputs (args) and output (return type)
+                
+                // first, deal with the input types
+                println!("HELLO FOREIGN FCT: {:?}, {:?}", inputs, output); 
+                Some(
+                    Self {
+                        link_name,
+                        inputs_types: inputs,
+                        output_type: output
+                    })
+            }, 
+            _ => None /* Not a call to a foreign function */ 
+        }
+        
+    }
 }
 
 impl<'mir, 'tcx: 'mir> EvalContextExt<'mir, 'tcx> for crate::MiriEvalContext<'mir, 'tcx> {}
@@ -241,37 +288,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         let this = self.eval_context_mut();
         let link_name = this.item_link_name(def_id);
         let tcx = this.tcx.tcx;
-
-        use rustc_hir::{self as hir, def_id::LOCAL_CRATE, Node};
-
-        match def_id.as_local() {
-            Some(local_id) => {
-                match(&tcx.hir().get(tcx.hir().local_def_id_to_hir_id(local_id))) {
-                    // calls to foreign functions
-                    Node::ForeignItem(&hir::ForeignItem { 
-                        ident, 
-                        kind: hir::ForeignItemKind::Fn(&hir::FnDecl{
-                            inputs,
-                            ref output, 
-                            ..
-                        },..), 
-                        def_id, 
-                        span, 
-                        vis_span 
-                    }) => { 
-                        // kind: Fn(&'hir FnDecl<'hir>, &'hir [Ident], &'hir Generics<'hir>)
-                        // we care about the inputs (args) and output (return type)
-                        
-                        // first, deal with the input types
-                        println!("HELLO FOREIGN FCT: {:?}, {:?}", inputs, output); 
-                    }, 
-                    _ => { /* Not a call to a foreign function */ }
-                }
-            },
-            None => {
-                /* no corresponding local ID (shouldn't happen with calls to extern C blocks) */
-            }
-        }
  
         let ret = match ret {
             None =>
@@ -332,7 +348,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         };
 
         // Second: functions that return.
-        match this.emulate_foreign_item_by_name(link_name, abi, args, dest, ret)? {
+        match this.emulate_foreign_item_by_name(def_id, link_name, abi, args, dest, ret)? {
             EmulateByNameResult::NeedsJumping => {
                 trace!("{:?}", this.dump_place(**dest));
                 this.go_to_block(ret);
@@ -344,7 +360,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     return Ok(Some(body));
                 }
                 //println!("link name: {:?}, args: {:?}, dest: {:?}, ret: {:?}", link_name, args, dest, ret);
-                this.handle_unsupported_c( format!("can't call foreign function: {}", link_name), dest, link_name, args)?;
+                // this.handle_unsupported_c( format!("can't call foreign function: {}", link_name), dest, link_name, args)?;
                 // this.handle_unsupported(format!("FUNCTIONS THAT RETURN can't call foreign function: {}", link_name))?;
                 return Ok(None);
             }
@@ -386,6 +402,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
     /// Emulates calling a foreign item using its name.
     fn emulate_foreign_item_by_name(
         &mut self,
+        def_id: DefId,
         link_name: Symbol,
         abi: Abi,
         args: &[OpTy<'tcx, Tag>],
@@ -393,6 +410,23 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         ret: mir::BasicBlock,
     ) -> InterpResult<'tcx, EmulateByNameResult<'mir, 'tcx>> {
         let this = self.eval_context_mut();
+
+        let tcx = this.tcx.tcx;
+
+        // TODO ellen! eventually delegate this to its own function
+        // right now it's a hacky way of first dealing with the external C functions;
+        // we also need to properly return instead of crashing execution
+        match def_id.as_local() {
+            Some(local_id) => {
+                if let Some(extern_c_fct_rep) = ExternalCFuncDeclRep::from_hir_node(
+                    &tcx.hir().get(tcx.hir().local_def_id_to_hir_id(local_id)), link_name) {
+                        this.handle_unsupported_c( format!("REE: {}", link_name), dest, extern_c_fct_rep, args)?
+                    }
+            },
+            None => {
+                /* no corresponding local ID (shouldn't happen with calls to extern C blocks) */
+            }
+        }
 
         // Here we dispatch all the shims for foreign functions. If you have a platform specific
         // shim, add it to the corresponding submodule.
