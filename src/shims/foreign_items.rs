@@ -60,6 +60,9 @@ pub enum CArg {
     Int32(i32),
 }
 
+// pub trait SizedCType: libffi::high::CType + Sized {}
+// impl SizedCType for i32 {}
+
 impl CArg {
     pub fn try_into_ctype(&self) -> Result<impl libffi::high::CType, ()> {
         match *self {
@@ -68,6 +71,7 @@ impl CArg {
         }
     }
 }
+
 
 impl<'hir> ExternalCFuncDeclRep<'hir> {
     pub fn from_hir_node(node: &Node<'hir>, link_name: Symbol) -> Option<Self> {

@@ -3,7 +3,7 @@ pub mod convert;
 use std::mem;
 use std::num::NonZeroUsize;
 use std::time::Duration;
-use std::any::Any;
+use std::any::{Any, TypeId};
 
 use log::trace;
 
@@ -73,18 +73,6 @@ fn try_resolve_did<'tcx>(tcx: TyCtxt<'tcx>, path: &[&str]) -> Option<DefId> {
             None
         },
     )
-}
-
-macro_rules! pls {
-    ($arr:expr, $size:expr) => {
-        {
-            let mut data: [libffi::high::Arg; 1000];
-            for index in 0..$size {
-                data[index] = arg(&$arr[index].try_into_ctype().unwrap());
-            }
-            data
-        }
-    };
 }
 
 pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx> {
@@ -753,33 +741,54 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         })
     }
 
-    // TODO ellen! make this return a result if it can't add to arglist properly
-    // UGH TYPE ERRORS
-    // specifically, problems with adding to the array of args because it's a list of references
-    // fn get_arg_for_type<TagType: Provenance>(s: &ScalarMaybeUninit<TagType>, s_typ: &hir::Ty<'tcx>) -> Option<>{
-    //     // TODO ellen! hideous code, should use matches! or ifs probably
-    //     match (s.to_i32(), s_typ) {
-    //         (Ok(v), &hir::Ty{
-    //             hir_id:_, kind: hir::TyKind::Path(
-    //                 hir::QPath::Resolved(_, hir::Path { 
-    //                     span: _, 
-    //                     res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
-    //                 ), ..
-    //         }) => {
-    //             // libffi_arglist.push(arg(&v));
-    //             return Some(v)
-    //         },
-    //         _ => {}
-    //     }
-    //     None
-    // }
-
     fn call_and_add_external_C_fct_to_context(&mut self, 
         external_fct_defn: ExternalCFuncDeclRep<'tcx>, dest: &PlaceTy<'tcx, Tag>, args: &[OpTy<'tcx, Tag>]) -> InterpResult<'tcx, ()> {
+        
         let this = self.eval_context_mut();
-
         let link_name = external_fct_defn.link_name;
         use std::ops::Deref;
+
+        // get the function arguments
+        let mut libffi_args = Vec::<(Box<dyn Any>, CArg)>::with_capacity(args.len());
+        for (cur_arg, arg_type) in args.iter().zip(external_fct_defn.inputs_types.iter()) {
+            match this.read_scalar(cur_arg) {
+                Ok(k) => {
+                    match (k.to_i32(), arg_type) {
+                        (Ok(v), &hir::Ty{
+                            hir_id:_, kind: hir::TyKind::Path(
+                                hir::QPath::Resolved(_, hir::Path { 
+                                    span: _, 
+                                    res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
+                                ), ..
+                        }) => {
+                            println!("ARGG: {:?}", v);
+                            libffi_args.push((Box::new(v), CArg::Int32(v)));
+                        },
+                        _ => {
+                            libffi_args.push((Box::new(()), CArg::INVALID));
+                            throw_unsup_format!("Unsupported argument type to external C function: {:?}", k);
+                        }
+                    }
+                },
+                _ => {
+                    libffi_args.push((Box::new(()), CArg::INVALID));
+                    throw_unsup_format!("Unsupported argument type to external C function: {:?}", cur_arg);
+                }
+            }
+        }
+
+        let libffi_args = libffi_args.iter()
+            .map(|cur_arg| {
+                match cur_arg {
+                    (boxed, CArg::Int32(_)) => {
+                        arg(&(*boxed.downcast_ref::<i32>().unwrap()))
+                    },
+                    _ => {
+                        // should be unreachable
+                        panic!("Trying to call external function with unsupported type: should have already bailed");
+                    }
+                }
+            }).collect::<Vec<libffi::high::Arg>>();
 
         unsafe {
             // TODO ellen! actual error handling here, throw_unsup 
@@ -795,37 +804,9 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                         ), ..
                 }) => {
                     // TODO ellen! deal with the args, try and get the actual values
-                    // let mut libffi_args = Vec::<Box<dyn Any>>::with_capacity(args.len());
-                    let arg_len: usize = args.len();
-                    let libffi_args = args.iter().zip(external_fct_defn.inputs_types.iter()).map(|(cur_arg, arg_type)|  {
-                        match this.read_scalar(cur_arg) {
-                            Ok(k) => {
-                                // let libffi_arg = Self::get_arg_for_type::<machine::Tag>(&k, arg_type);
-                                match (k.to_i32(), arg_type) {
-                                    (Ok(v), &hir::Ty{
-                                        hir_id:_, kind: hir::TyKind::Path(
-                                            hir::QPath::Resolved(_, hir::Path { 
-                                                span: _, 
-                                                res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
-                                            ), ..
-                                    }) => {
-                                        println!("ARGG: {:?}", v);
-                                        CArg::Int32(v)
-                                    },
-                                    _ => {
-                                        CArg::INVALID
-                                    }
-                                }
-                            },
-                            _ => {
-                                CArg::INVALID
-                            }
-                        }
-                    }).collect::<Vec<CArg>>(); 
+                    
 
-                    // let help = pls!{ libffi_args.as_slice(), libffi_args.len() };
-
-                    let x = call::<i32>(ptr, &[arg(&libffi_args[0].try_into_ctype().unwrap())]);
+                    let x = call::<i32>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
                     println!("REEE: {:?}", x);
                     return Ok(());
