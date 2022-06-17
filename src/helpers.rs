@@ -809,20 +809,19 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                         }
                     }).collect::<Vec<CArg>>(); 
 
-                    let x = call::<i32>(ptr, &[]);
+                    let x = call::<i32>(ptr, &[arg(&1i32)]);
                     this.write_int(x, dest)?;
                     println!("REEE: {:?}", x);
                     return Ok(());
                 },
                 hir::FnRetTy::DefaultReturn(_) => {
-                    println!("NOT SUPPORTING DEFAULT (i.e. void) RETURN TYPE YET");
+                    throw_unsup_format!("NOT SUPPORTING DEFAULT (i.e. void) RETURN TYPE YET");
                 },
                 _ => {
-                    println!("UNSUPPORTED RETURN TYPE -- NOT VOID");
+                    throw_unsup_format!("UNSUPPORTED RETURN TYPE -- NOT VOID");
                 }
             }
         }
-
         // TODO don't reload the function every time
         // but it seems the pointer does not persist across the unsafe boundary? 
 
@@ -848,40 +847,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         // }
 
         // this.machine.add_extern_c_fct_defn(external_fct_defn.link_name, code_ptr)?;
-        Ok(())
-    }
-
-    // TODO ellen! get rid of this function, it just immediately dispatches to call_and_add
-    fn handle_unsupported_c<S: AsRef<str>>(&mut self, error_msg: S, 
-        dest: &PlaceTy<'tcx, Tag>, external_fct_defn: ExternalCFuncDeclRep<'tcx>,  args: &[OpTy<'tcx, Tag>]) -> InterpResult<'tcx, ()> {
-
-        // let link_name = external_fct_defn.link_name;
-
-        self.call_and_add_external_C_fct_to_context(external_fct_defn, dest, args)?;
-
-        // use libffi::{ffi_call, high::call::*};
-
-        // let this = self.eval_context_mut();
-
-        // call function if it exists, if not throw unsupported
-        // match this.machine.get_extern_c_fct_defn(link_name) {
-        //     Some(fct_ptr) => {
-        //         unsafe {
-        //             let x = call::<f32>(CodePtr(*fct_ptr as *mut _), &[]);
-        //             println!("x: {:?}", x);
-        //         }
-        //         // TODO ellen! actually do something with the result here
-        //         // Ok(())
-        //         throw_unsup_format!("WOOP {}", error_msg.as_ref());
-        //     },
-        //     None => {
-        //         throw_unsup_format!("{}", error_msg.as_ref());
-        //     }
-        // }
-        throw_unsup_format!("{}", error_msg.as_ref());
-
-        // this.write_null(dest)?;
-        // Ok(())
     }
 
     /// Handler that should be called when unsupported functionality is encountered.

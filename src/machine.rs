@@ -345,11 +345,6 @@ pub struct Evaluator<'mir, 'tcx> {
     pub external_c_so_file: Option<String>,
 }
 
-// TODO ellen! make this try_into an extern signature so it autocasts
-pub trait ExternCFunction<ArgType, RetType> {
-    fn function_ptr(&self) -> unsafe extern "C" fn(ArgType) -> RetType;
-}
-
 impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
     pub(crate) fn new(config: &MiriConfig, layout_cx: LayoutCx<'tcx, TyCtxt<'tcx>>) -> Self {
         let local_crates = helpers::get_local_crates(layout_cx.tcx);

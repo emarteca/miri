@@ -41,6 +41,8 @@ pub enum EmulateByNameResult<'mir, 'tcx> {
     AlreadyJumped,
     /// A MIR body has been found for the function
     MirBody(&'mir mir::Body<'tcx>, ty::Instance<'tcx>),
+    /// Executed an external C call
+    ExecutedExternalCCall,
     /// The item is not supported.
     NotSupported,
 }
@@ -372,7 +374,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
 
         // Second: functions that return.
         match this.emulate_foreign_item_by_name(def_id, link_name, abi, args, dest, ret)? {
-            EmulateByNameResult::NeedsJumping => {
+            EmulateByNameResult::NeedsJumping | EmulateByNameResult::ExecutedExternalCCall => {
                 trace!("{:?}", this.dump_place(**dest));
                 this.go_to_block(ret);
             }
@@ -436,18 +438,13 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
 
         let tcx = this.tcx.tcx;
 
-        // TODO ellen! eventually delegate this to its own function
-        // right now it's a hacky way of first dealing with the external C functions;
-        // we also need to properly return instead of crashing execution
-        match def_id.as_local() {
-            Some(local_id) => {
-                if let Some(extern_c_fct_rep) = ExternalCFuncDeclRep::from_hir_node(
-                    &tcx.hir().get(tcx.hir().local_def_id_to_hir_id(local_id)), link_name) {
-                        this.handle_unsupported_c( format!("REE: {}", link_name), dest, extern_c_fct_rep, args)?
+        // first deal with any external C functions in linked .so files
+        if let Some(local_id) = def_id.as_local() {
+            if let Some(extern_c_fct_rep) = ExternalCFuncDeclRep::from_hir_node(
+                &tcx.hir().get(tcx.hir().local_def_id_to_hir_id(local_id)), link_name) {
+                    if let Ok(_) = this.call_and_add_external_C_fct_to_context( extern_c_fct_rep, dest, args) {
+                        return Ok(EmulateByNameResult::ExecutedExternalCCall);
                     }
-            },
-            None => {
-                /* no corresponding local ID (shouldn't happen with calls to extern C blocks) */
             }
         }
 
