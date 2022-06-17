@@ -60,21 +60,14 @@ pub enum CArg {
     Int32(i32),
 }
 
-
-// impl<'a> TryInto<libffi::high::Arg<'a>> for CArg<'a> {
-//     type Error = ();
-
-//     fn try_into(self) -> Result<libffi::high::Arg<'a>, Self::Error> {
-//         match self {
-//             CArg::Int32(v) => {
-//                 Ok(libffi::high::arg(*v))
-//             },
-//             _ => {
-//                 Err(())
-//             }
-//         }
-//     }
-// }
+impl CArg {
+    pub fn try_into_ctype(&self) -> Result<impl libffi::high::CType, ()> {
+        match *self {
+            CArg::Int32(v) => Ok(v),
+            CArg::INVALID => Err(()),
+        }
+    }
+}
 
 impl<'hir> ExternalCFuncDeclRep<'hir> {
     pub fn from_hir_node(node: &Node<'hir>, link_name: Symbol) -> Option<Self> {

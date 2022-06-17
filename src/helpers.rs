@@ -75,6 +75,18 @@ fn try_resolve_did<'tcx>(tcx: TyCtxt<'tcx>, path: &[&str]) -> Option<DefId> {
     )
 }
 
+macro_rules! pls {
+    ($arr:expr, $size:expr) => {
+        {
+            let mut data: [libffi::high::Arg; 1000];
+            for index in 0..$size {
+                data[index] = arg(&$arr[index].try_into_ctype().unwrap());
+            }
+            data
+        }
+    };
+}
+
 pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx> {
     /// Gets an instance for a path; fails gracefully if the path does not exist.
     fn try_resolve_path(&self, path: &[&str]) -> Option<ty::Instance<'tcx>> {
@@ -770,6 +782,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         use std::ops::Deref;
 
         unsafe {
+            // TODO ellen! actual error handling here, throw_unsup 
             let lib = libloading::Library::new(this.machine.external_c_so_file.as_ref().unwrap()).unwrap();
             let func: libloading::Symbol<unsafe extern fn()> = lib.get(link_name.as_str().as_bytes()).unwrap();
             let ptr = CodePtr(*func.deref() as *mut _);
@@ -783,8 +796,8 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     // TODO ellen! deal with the args, try and get the actual values
                     // let mut libffi_args = Vec::<Box<dyn Any>>::with_capacity(args.len());
+                    let arg_len: usize = args.len();
                     let libffi_args = args.iter().zip(external_fct_defn.inputs_types.iter()).map(|(cur_arg, arg_type)|  {
-                        println!("ARGGGG: {:?}", cur_arg);
                         match this.read_scalar(cur_arg) {
                             Ok(k) => {
                                 // let libffi_arg = Self::get_arg_for_type::<machine::Tag>(&k, arg_type);
@@ -796,6 +809,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                                                 res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
                                             ), ..
                                     }) => {
+                                        println!("ARGG: {:?}", v);
                                         CArg::Int32(v)
                                     },
                                     _ => {
@@ -809,7 +823,9 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                         }
                     }).collect::<Vec<CArg>>(); 
 
-                    let x = call::<i32>(ptr, &[arg(&1i32)]);
+                    // let help = pls!{ libffi_args.as_slice(), libffi_args.len() };
+
+                    let x = call::<i32>(ptr, &[arg(&libffi_args[0].try_into_ctype().unwrap())]);
                     this.write_int(x, dest)?;
                     println!("REEE: {:?}", x);
                     return Ok(());
