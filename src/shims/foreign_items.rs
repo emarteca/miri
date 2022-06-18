@@ -2,7 +2,7 @@ use std::{collections::hash_map::Entry, iter};
 
 use log::trace;
 
-use rustc_apfloat::Float;
+use rustc_apfloat::{Float, ieee::{IeeeFloat, SingleS, DoubleS}};
 use rustc_ast::{
     expand::allocator::AllocatorKind,
 };
@@ -57,21 +57,17 @@ pub struct ExternalCFuncDeclRep<'hir> {
 #[derive(Debug, Clone)]
 pub enum CArg {
     INVALID,
+    Int8(i8),
+    Int16(i16),
     Int32(i32),
+    Int64(i64),
+    UInt8(u8),
+    UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
+    Float32(IeeeFloat<SingleS>),
+    Float64(IeeeFloat<DoubleS>),
 }
-
-// pub trait SizedCType: libffi::high::CType + Sized {}
-// impl SizedCType for i32 {}
-
-impl CArg {
-    pub fn try_into_ctype(&self) -> Result<impl libffi::high::CType, ()> {
-        match *self {
-            CArg::Int32(v) => Ok(v),
-            CArg::INVALID => Err(()),
-        }
-    }
-}
-
 
 impl<'hir> ExternalCFuncDeclRep<'hir> {
     pub fn from_hir_node(node: &Node<'hir>, link_name: Symbol) -> Option<Self> {

@@ -7,7 +7,7 @@ use std::any::{Any, TypeId};
 
 use log::trace;
 
-use rustc_ast::{IntTy};
+use rustc_ast::{IntTy, UintTy, FloatTy};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
 use rustc_hir::{self as hir};
 use rustc_middle::mir;
@@ -753,20 +753,90 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         for (cur_arg, arg_type) in args.iter().zip(external_fct_defn.inputs_types.iter()) {
             match this.read_scalar(cur_arg) {
                 Ok(k) => {
-                    match (k.to_i32(), arg_type) {
-                        (Ok(v), &hir::Ty{
-                            hir_id:_, kind: hir::TyKind::Path(
-                                hir::QPath::Resolved(_, hir::Path { 
-                                    span: _, 
-                                    res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
-                                ), ..
-                        }) => {
+                    // the ints
+                    if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I8)), ..},..)
+                            ), ..
+                    }) = (k.to_i8(), arg_type) {
+                            libffi_args.push((Box::new(v), CArg::Int8(v)));
+                    } else if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I16)), ..},..)
+                            ), ..
+                    }) = (k.to_i16(), arg_type) {
+                            libffi_args.push((Box::new(v), CArg::Int16(v)));
+                    } else if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
+                            ), ..
+                    }) = (k.to_i32(), arg_type) {
                             libffi_args.push((Box::new(v), CArg::Int32(v)));
-                        },
-                        _ => {
-                            libffi_args.push((Box::new(()), CArg::INVALID));
-                            throw_unsup_format!("Unsupported argument type to external C function: {:?}", k);
-                        }
+                    } else if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I64)), ..},..)
+                            ), ..
+                    }) = (k.to_i64(), arg_type) {
+                            libffi_args.push((Box::new(v), CArg::Int64(v)));
+                    }
+                    // the uints
+                    else if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Uint(UintTy::U8)), ..},..)
+                            ), ..
+                    }) = (k.to_u8(), arg_type) {
+                            libffi_args.push((Box::new(v), CArg::UInt8(v)));
+                    } else if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Uint(UintTy::U16)), ..},..)
+                            ), ..
+                    }) = (k.to_u16(), arg_type) {
+                            libffi_args.push((Box::new(v), CArg::UInt16(v)));
+                    } else if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Uint(UintTy::U32)), ..},..)
+                            ), ..
+                    }) = (k.to_u32(), arg_type) {
+                            libffi_args.push((Box::new(v), CArg::UInt32(v)));
+                    } else if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Uint(UintTy::U64)), ..},..)
+                            ), ..
+                    }) = (k.to_u64(), arg_type) {
+                            libffi_args.push((Box::new(v), CArg::UInt64(v)));
+                    // the floats
+                    } else if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Float(FloatTy::F32)), ..},..)
+                            ), ..
+                    }) = (k.to_f32(), arg_type) {
+                            libffi_args.push((Box::new(v), CArg::Float32(v)));
+                    } else if let (Ok(v), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Path(
+                            hir::QPath::Resolved(_, hir::Path { 
+                                span: _, 
+                                res: hir::def::Res::PrimTy(hir::PrimTy::Float(FloatTy::F64)), ..},..)
+                            ), ..
+                    }) = (k.to_f64(), arg_type) {
+                            libffi_args.push((Box::new(v), CArg::Float64(v)));
                     }
                 },
                 _ => {
@@ -779,8 +849,29 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         let libffi_args = libffi_args.iter()
             .map(|cur_arg| {
                 match cur_arg {
+                    (boxed, CArg::Int8(_)) => {
+                        arg(&(*boxed.downcast_ref::<i8>().unwrap()))
+                    },
+                    (boxed, CArg::Int16(_)) => {
+                        arg(&(*boxed.downcast_ref::<i16>().unwrap()))
+                    },
                     (boxed, CArg::Int32(_)) => {
                         arg(&(*boxed.downcast_ref::<i32>().unwrap()))
+                    },
+                    (boxed, CArg::Int64(_)) => {
+                        arg(&(*boxed.downcast_ref::<i64>().unwrap()))
+                    },
+                    (boxed, CArg::UInt8(_)) => {
+                        arg(&(*boxed.downcast_ref::<u8>().unwrap()))
+                    },
+                    (boxed, CArg::UInt16(_)) => {
+                        arg(&(*boxed.downcast_ref::<u16>().unwrap()))
+                    },
+                    (boxed, CArg::UInt32(_)) => {
+                        arg(&(*boxed.downcast_ref::<u32>().unwrap()))
+                    },
+                    (boxed, CArg::UInt64(_)) => {
+                        arg(&(*boxed.downcast_ref::<u64>().unwrap()))
                     },
                     _ => {
                         // should be unreachable
@@ -804,6 +895,29 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
             let func: libloading::Symbol<unsafe extern fn()> = lib.get(link_name.as_str().as_bytes()).unwrap();
             let ptr = CodePtr(*func.deref() as *mut _);
             match external_fct_defn.output_type {
+                // ints
+                hir::FnRetTy::Return(&hir::Ty{
+                    hir_id:_, kind: hir::TyKind::Path(
+                        hir::QPath::Resolved(_, hir::Path { 
+                            span: _, 
+                            res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I8)), ..},..)
+                        ), ..
+                }) => {
+                    let x = call::<i8>(ptr, &libffi_args.as_slice());
+                    this.write_int(x, dest)?;
+                    return Ok(());
+                },
+                hir::FnRetTy::Return(&hir::Ty{
+                    hir_id:_, kind: hir::TyKind::Path(
+                        hir::QPath::Resolved(_, hir::Path { 
+                            span: _, 
+                            res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I16)), ..},..)
+                        ), ..
+                }) => {
+                    let x = call::<i16>(ptr, &libffi_args.as_slice());
+                    this.write_int(x, dest)?;
+                    return Ok(());
+                },
                 hir::FnRetTy::Return(&hir::Ty{
                     hir_id:_, kind: hir::TyKind::Path(
                         hir::QPath::Resolved(_, hir::Path { 
@@ -815,6 +929,75 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     this.write_int(x, dest)?;
                     return Ok(());
                 },
+                hir::FnRetTy::Return(&hir::Ty{
+                    hir_id:_, kind: hir::TyKind::Path(
+                        hir::QPath::Resolved(_, hir::Path { 
+                            span: _, 
+                            res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I64)), ..},..)
+                        ), ..
+                }) => {
+                    let x = call::<i64>(ptr, &libffi_args.as_slice());
+                    this.write_int(x, dest)?;
+                    return Ok(());
+                },
+                // uints
+                hir::FnRetTy::Return(&hir::Ty{
+                    hir_id:_, kind: hir::TyKind::Path(
+                        hir::QPath::Resolved(_, hir::Path { 
+                            span: _, 
+                            res: hir::def::Res::PrimTy(hir::PrimTy::Uint(UintTy::U8)), ..},..)
+                        ), ..
+                }) => {
+                    let x = call::<u8>(ptr, &libffi_args.as_slice());
+                    this.write_int(x, dest)?;
+                    return Ok(());
+                },
+                hir::FnRetTy::Return(&hir::Ty{
+                    hir_id:_, kind: hir::TyKind::Path(
+                        hir::QPath::Resolved(_, hir::Path { 
+                            span: _, 
+                            res: hir::def::Res::PrimTy(hir::PrimTy::Uint(UintTy::U16)), ..},..)
+                        ), ..
+                }) => {
+                    let x = call::<u16>(ptr, &libffi_args.as_slice());
+                    this.write_int(x, dest)?;
+                    return Ok(());
+                },
+                hir::FnRetTy::Return(&hir::Ty{
+                    hir_id:_, kind: hir::TyKind::Path(
+                        hir::QPath::Resolved(_, hir::Path { 
+                            span: _, 
+                            res: hir::def::Res::PrimTy(hir::PrimTy::Uint(UintTy::U32)), ..},..)
+                        ), ..
+                }) => {
+                    let x = call::<u32>(ptr, &libffi_args.as_slice());
+                    this.write_int(x, dest)?;
+                    return Ok(());
+                },
+                hir::FnRetTy::Return(&hir::Ty{
+                    hir_id:_, kind: hir::TyKind::Path(
+                        hir::QPath::Resolved(_, hir::Path { 
+                            span: _, 
+                            res: hir::def::Res::PrimTy(hir::PrimTy::Uint(UintTy::U64)), ..},..)
+                        ), ..
+                }) => {
+                    let x = call::<u64>(ptr, &libffi_args.as_slice());
+                    this.write_int(x, dest)?;
+                    return Ok(());
+                },
+                // TODO ellen! deal with all the other int return types
+                // UH OH FLOATSSSS
+                // hir::FnRetTy::Return(&hir::Ty{
+                //     hir_id:_, kind: hir::TyKind::Path(
+                //         hir::QPath::Resolved(_, hir::Path { 
+                //             span: _, 
+                //             res: hir::def::Res::PrimTy(hir::PrimTy::Float(FloatTy::F64)), ..},..)
+                //         ), ..
+                // }) => {
+                //     let x = call::<f64>(ptr, &libffi_args.as_slice());
+                //     this.write_scalar(x, dest)?;
+                //     return Ok(());
+                // },
                 hir::FnRetTy::DefaultReturn(_) => {
                     throw_unsup_format!("NOT SUPPORTING DEFAULT (i.e. void) RETURN TYPE YET");
                 },
