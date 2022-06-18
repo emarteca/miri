@@ -761,7 +761,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                                     res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
                                 ), ..
                         }) => {
-                            println!("ARGG: {:?}", v);
                             libffi_args.push((Box::new(v), CArg::Int32(v)));
                         },
                         _ => {
@@ -791,8 +790,17 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
             }).collect::<Vec<libffi::high::Arg>>();
 
         unsafe {
-            // TODO ellen! actual error handling here, throw_unsup 
-            let lib = libloading::Library::new(this.machine.external_c_so_file.as_ref().unwrap()).unwrap();
+            let lib = match libloading::Library::new(match this.machine.external_c_so_file.as_ref(){
+                Some(x) => x,
+                None => {
+                    throw_unsup_format!("Error reading specified shared object file");
+                }
+            }) {
+                Ok(x) => x,
+                Err(_) => {
+                    throw_unsup_format!("Error reading specified shared object file");
+                }
+            };
             let func: libloading::Symbol<unsafe extern fn()> = lib.get(link_name.as_str().as_bytes()).unwrap();
             let ptr = CodePtr(*func.deref() as *mut _);
             match external_fct_defn.output_type {
@@ -803,12 +811,8 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                             res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..},..)
                         ), ..
                 }) => {
-                    // TODO ellen! deal with the args, try and get the actual values
-                    
-
                     let x = call::<i32>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
-                    println!("REEE: {:?}", x);
                     return Ok(());
                 },
                 hir::FnRetTy::DefaultReturn(_) => {
@@ -831,18 +835,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         //         unsafe {
         //             let lib = libloading::Library::new("ffi_tests/src/libtestlib.so").unwrap();
         //             let func: libloading::Symbol<unsafe extern fn()> = lib.get(link_name.as_str().as_bytes()).unwrap();
-        //             let ptr = CodePtr(*func.deref() as *mut _);
-        //             // let x = call::<i32>(ptr, &[]);
-        //             // println!("REEE: {:?}", x);
-        //             code_ptr = ptr;
-        //         }
-        //     }
-        // };
-        // unsafe {
-        //     let x = call::<i32>(code_ptr, &[]);
-        //     println!("OMGGGG: {:?}", x);
-        // }
-
         // this.machine.add_extern_c_fct_defn(external_fct_defn.link_name, code_ptr)?;
     }
 
