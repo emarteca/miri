@@ -999,7 +999,9 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 //     return Ok(());
                 // },
                 hir::FnRetTy::DefaultReturn(_) => {
-                    throw_unsup_format!("NOT SUPPORTING DEFAULT (i.e. void) RETURN TYPE YET");
+                    call::<()>(ptr, &libffi_args.as_slice());
+                    return Ok(());
+                    // throw_unsup_format!("NOT SUPPORTING DEFAULT (i.e. void) RETURN TYPE YET");
                 },
                 _ => {
                     throw_unsup_format!("UNSUPPORTED RETURN TYPE -- NOT VOID");
