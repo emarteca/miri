@@ -206,12 +206,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     this.check_shim(abi, Abi::C { unwind: false }, link_name, args)?;
                 this.write_null(dest)?;
             }
-
-            /*_ => {
-                println!("NEVER CRASH");
-                 this.write_null(dest)?;
-            }*/
-
             _ => return Ok(EmulateByNameResult::NotSupported),
         };
 

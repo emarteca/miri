@@ -213,7 +213,7 @@ pub fn report_error<'tcx, 'mir>(
             #[rustfmt::skip]
             let title = match e.kind() {
                 Unsupported(_) =>
-                    "OH SHIT unsupported operation",
+                    "unsupported operation",
                 UndefinedBehavior(_) =>
                     "Undefined Behavior",
                 ResourceExhaustion(_) =>

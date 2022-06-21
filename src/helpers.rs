@@ -829,6 +829,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                             ), ..
                     }) = (k.to_f32(), arg_type) {
                             libffi_args.push((Box::new(v), CArg::Float32(v)));
+                            throw_unsup_format!("Unsupported argument type -- FLOAT32 -- to external C function: {:?}", cur_arg);
                     } else if let (Ok(v), &hir::Ty{
                         hir_id:_, kind: hir::TyKind::Path(
                             hir::QPath::Resolved(_, hir::Path { 
@@ -837,6 +838,10 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                             ), ..
                     }) = (k.to_f64(), arg_type) {
                             libffi_args.push((Box::new(v), CArg::Float64(v)));
+                            throw_unsup_format!("Unsupported argument type -- FLOAT64 -- to external C function: {:?}", cur_arg);
+                    } else {
+                        libffi_args.push((Box::new(()), CArg::INVALID));
+                        throw_unsup_format!("Unsupported scalar argument type to external C function: {:?}", cur_arg);
                     }
                 },
                 _ => {
@@ -875,6 +880,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     },
                     _ => {
                         // should be unreachable
+                        println!("UMMM: {:?}", cur_arg);
                         panic!("Trying to call external function with unsupported type: should have already bailed");
                     }
                 }

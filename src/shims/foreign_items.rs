@@ -88,7 +88,6 @@ impl<'hir> ExternalCFuncDeclRep<'hir> {
                 // we care about the inputs (args) and output (return type)
                 
                 // first, deal with the input types
-                println!("HELLO FOREIGN FCT: {:?}, {:?}\n\n", inputs, output); 
                 Some(
                     Self {
                         link_name,
@@ -377,10 +376,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 if let Some(body) = this.lookup_exported_symbol(link_name)? {
                     return Ok(Some(body));
                 }
-                //println!("link name: {:?}, args: {:?}, dest: {:?}, ret: {:?}", link_name, args, dest, ret);
-                // this.handle_unsupported_c( format!("can't call foreign function: {}", link_name), dest, link_name, args)?;
-                // this.handle_unsupported(format!("FUNCTIONS THAT RETURN can't call foreign function: {}", link_name))?;
-                return Ok(None);
+                this.handle_unsupported(format!("can't call foreign function: {}", link_name))?;
             }
         }
 
@@ -437,7 +433,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 &tcx.hir().get(tcx.hir().local_def_id_to_hir_id(local_id)), link_name) {
                     if let Ok(_) = this.call_and_add_external_C_fct_to_context( extern_c_fct_rep, dest, args) {
                         return Ok(EmulateByNameResult::ExecutedExternalCCall);
-                    }
+                    } 
             }
         }
 
@@ -789,7 +785,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 target => throw_unsup_format!("the target `{}` is not supported", target),
             }
         };
-
+        
         // We only fall through to here if we did *not* hit the `_` arm above,
         // i.e., if we actually emulated the function.
         Ok(EmulateByNameResult::NeedsJumping)
