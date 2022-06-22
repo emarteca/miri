@@ -127,6 +127,10 @@ test|test-debug|bless|bless-debug)
     # First build and get a sysroot.
     cargo build $CARGO_BUILD_FLAGS
     find_sysroot
+    # rebuild the C test shared object file if it's not there
+    if [ ! -f "tests/external_C/libtestlib.so" ]; then
+        gcc -shared -o tests/external_C/libtestlib.so tests/external_C/test.c
+    fi
     case "$COMMAND" in
     bless|bless-debug)
         export MIRI_BLESS="Gesundheit"

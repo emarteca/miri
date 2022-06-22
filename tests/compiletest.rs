@@ -38,6 +38,9 @@ fn run_tests(mode: Mode, path: &str, target: Option<String>) {
         flags.push(target.clone());
     }
 
+    // add flags for testing the external C functionality
+    flags.push("-Zmiri-external_c_so_file=tests/external_C/libtestlib.so".to_string());
+
     let skip_ui_checks = in_rustc_test_suite || env::var_os("MIRI_SKIP_UI_CHECKS").is_some();
 
     let output_conflict_handling = match (env::var_os("MIRI_BLESS").is_some(), skip_ui_checks) {

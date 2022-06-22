@@ -898,7 +898,12 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     throw_unsup_format!("Error reading specified shared object file");
                 }
             };
-            let func: libloading::Symbol<unsafe extern fn()> = lib.get(link_name.as_str().as_bytes()).unwrap();
+            let func: libloading::Symbol<unsafe extern fn()> = match lib.get(link_name.as_str().as_bytes()) {
+                Ok(x) => x,
+                Err(_) => {
+                    throw_unsup_format!("Error reading function {:?} from specified shared object file", link_name.as_str());
+                }
+            };
             let ptr = CodePtr(*func.deref() as *mut _);
             match external_fct_defn.output_type {
                 // ints
