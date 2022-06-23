@@ -31,6 +31,7 @@ use rustc_target::spec::abi::Abi;
 use crate::{
     concurrency::{data_race, weak_memory},
     shims::unix::FileHandler,
+    shims::foreign_items::CPointerWrapper,
     *,
 };
 
@@ -340,9 +341,14 @@ pub struct Evaluator<'mir, 'tcx> {
     pub(crate) preemption_rate: f64,
 
     /// map of C function names to corresponding code pointers 
+    // TODO ellen! this isn't used right now
     pub extern_c_fct_definitions: FxHashMap< Symbol, CodePtr>,
 
+    /// Path to shared object file for loading external C functions
     pub external_c_so_file: Option<String>,
+
+    /// map of AllocIDs to the internal wrappers for C pointers
+    pub internal_C_pointer_wrappers: FxHashMap<AllocId, Box<dyn CPointerWrapper>>,
 }
 
 impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
@@ -402,6 +408,7 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
             preemption_rate: config.preemption_rate,
             extern_c_fct_definitions: FxHashMap::default(),
             external_c_so_file: config.external_c_so_file.clone(),
+            internal_C_pointer_wrappers: FxHashMap::default(),
         }
     }
 
@@ -414,6 +421,16 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
 
     pub fn get_extern_c_fct_defn(&self, link_name: Symbol) -> Option<&CodePtr>{
         self.extern_c_fct_definitions.get(&link_name)
+    }
+
+    pub fn add_internal_C_pointer_wrapper(&mut self, pointer_wrapper: Box<dyn CPointerWrapper>) -> InterpResult<'tcx> {
+        let next_id = AllocId(NonZeroU64::new((self.internal_C_pointer_wrappers.len() + 1) as u64).unwrap());
+        self.internal_C_pointer_wrappers.try_insert(next_id, pointer_wrapper).unwrap();
+        Ok(())
+    }
+
+    pub fn get_internal_C_pointer_wrapper(&self, alloc_id: AllocId) -> Option<&Box<dyn CPointerWrapper>>{
+        self.internal_C_pointer_wrappers.get(&alloc_id)
     }
 
     pub(crate) fn late_init(

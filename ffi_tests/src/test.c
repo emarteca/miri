@@ -1,7 +1,14 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 int get_num(int x) {
   return 2 + x;
+}
+
+int* pointer_test() {
+      int *point = malloc(sizeof(int)); 
+      *point=1;  
+      return point;
 }
 
 double get_dbl(int x) {

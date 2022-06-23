@@ -23,7 +23,8 @@ use rustc_target::spec::abi::Abi;
 use rand::RngCore;
 
 use crate::*;
-use crate::shims::foreign_items::{ExternalCFuncDeclRep, CArg};
+use crate::shims::foreign_items::{ExternalCFuncDeclRep, CArg, 
+    CPointerWrapper, MutableCPointerWrapper};
 
 use libffi::{high::call::*, low::CodePtr};
 
@@ -1012,7 +1013,31 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 hir::FnRetTy::DefaultReturn(_) => {
                     call::<()>(ptr, &libffi_args.as_slice());
                     return Ok(());
-                    // throw_unsup_format!("NOT SUPPORTING DEFAULT (i.e. void) RETURN TYPE YET");
+                },
+                // pointers!
+                // TODO! right now only int32
+                hir::FnRetTy::Return(&hir::Ty{
+                    hir_id:_, kind: hir::TyKind::Ptr(
+                        hir::MutTy{
+                            ty: &hir::Ty{
+                            hir_id:_, kind: hir::TyKind::Path(
+                                hir::QPath::Resolved(_, hir::Path { 
+                                    span: _, 
+                                    res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..
+                                },..)
+                            ), ..
+                        },..
+                    },..),..
+                }) => {
+                    println!("UMMM: {:?}", external_fct_defn.output_type );
+                    let ret_ptr = call::<*mut i32>(ptr, &libffi_args.as_slice());
+                    let ret_ptr_internal_wrapper = MutableCPointerWrapper::<i32>{ data: ret_ptr};
+                    this.machine.add_internal_C_pointer_wrapper(Box::new(ret_ptr_internal_wrapper));
+                    // TODO ellen! we've created the internal C pointer wrapper to track this
+                    // but we need to actually write it somewhere: implement write_internal_C_ptr
+                    // the main thing is that we recognize when we access it later
+                    println!("value first: {:?}", *ret_ptr);
+                    throw_unsup_format!("UNSUPPORTED RETURN TYPE -- CURRENTLY FIGURING OUT POINTERS");
                 },
                 _ => {
                     throw_unsup_format!("UNSUPPORTED RETURN TYPE -- NOT VOID");

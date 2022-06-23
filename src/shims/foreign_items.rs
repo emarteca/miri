@@ -48,13 +48,20 @@ pub enum EmulateByNameResult<'mir, 'tcx> {
 }
 
 #[derive(Debug)]
+/// Representation of the function signature of an external C function.
+/// Stores the function name, and its input (i.e., argument) and output (i.e., return) types
 pub struct ExternalCFuncDeclRep<'hir> {
+    /// Name of the function
     pub link_name: Symbol,
+    /// Array of argument types
     pub inputs_types: &'hir [Ty<'hir>],
+    /// Return type
     pub output_type: &'hir FnRetTy<'hir>,
 }
 
 #[derive(Debug, Clone)]
+// TODO ellen! extend with pointers
+/// Arguments to external C functions
 pub enum CArg {
     INVALID,
     Int8(i8),
@@ -100,6 +107,36 @@ impl<'hir> ExternalCFuncDeclRep<'hir> {
         
     }
 }
+
+/// Internal C pointer wrapper -- will deal with syncing between C and Rust
+// note: requires Debug as a supertrait so it can be unwrapped
+pub trait CPointerWrapper: std::fmt::Debug {
+    fn sync_miri_to_C(&self);
+    fn sync_C_to_miri(&self);
+}
+
+#[derive(Debug)]
+pub struct MutableCPointerWrapper<T> {
+    pub data: *mut T,
+}
+
+/// Representation of *mut <CType> 
+impl<T: std::fmt::Debug> CPointerWrapper for MutableCPointerWrapper<T> {
+    
+    fn sync_miri_to_C(&self) {
+
+    }
+
+    fn sync_C_to_miri(&self) {
+
+    }
+}
+
+/// Representation of *const <CType> 
+// TODO ellen! consts
+// pub struct ConstCPointerWrapper<T>: CPointerWrapper<T> {
+    
+// }
 
 impl<'mir, 'tcx: 'mir> EvalContextExt<'mir, 'tcx> for crate::MiriEvalContext<'mir, 'tcx> {}
 pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx> {
