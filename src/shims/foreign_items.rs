@@ -136,7 +136,34 @@ impl CPointerWrapper {
     }
 
     pub fn sync_C_to_miri(&self) {
+        match self {
+            CPointerWrapper::Mutable(mut_ptr) => {
+                mut_ptr.sync_C_to_miri()
+            },
+            _ => {
+                panic!("Shouldn't happen -- we've so far only implemented MutableCPointerWrapper for i32s");
+            }
+        }
+    }
+}
 
+impl MutableCPointerWrapper {
+    pub fn sync_miri_to_C(&self) {
+
+    }
+
+    pub fn sync_C_to_miri(&self) {
+        match self {
+            MutableCPointerWrapper::I32(c_ptr) => {
+                unsafe {
+                    let value = **c_ptr;
+                    println!("value: {:?}", value);
+                }
+            },
+            _ => {
+                panic!("Shouldn't happen -- we've so far only implemented MutableCPointerWrapper for i32s");
+            }
+        }
     }
 }
 

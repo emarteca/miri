@@ -792,16 +792,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
     ) -> InterpResult<'tcx> {
         if let Some(key) = alloc_extra.internal_C_ptr_key {
             let ptr_rep = machine.get_internal_C_pointer_wrapper(key).unwrap();
-            match *ptr_rep {
-                CPointerWrapper::Mutable(MutableCPointerWrapper::I32(c_ptr)) => {
-                    unsafe {
-                        println!("ummm: {:?}", *c_ptr);
-                    }
-                },
-                _ => {
-                    panic!("Shouldn't happen -- we've so far only implemented MutableCPointerWrapper");
-                }
-            }
+            ptr_rep.sync_C_to_miri();
             println!("oh hello -- reading: {:?}", ptr_rep);
             // read the pointer to get the location of the actual C pointer in the machine map
             // let ptr = this.read_pointer(ptr)?;
