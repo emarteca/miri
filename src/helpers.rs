@@ -1048,7 +1048,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     let ptr_id = this.machine.add_internal_C_pointer_wrapper(Box::new(ret_ptr_internal_wrapper))?;
                     // println!("{:?}", ptr_id.to_machine_usize(this)?);
                     const SIZE_IN_BYTES: u64 = 4;
-                    let res = this.malloc(SIZE_IN_BYTES, /*zero_init:*/ false, MiriMemoryKind::CInternal)?;
+                    let res = this.malloc(SIZE_IN_BYTES, /*zero_init:*/ false, MiriMemoryKind::CInternal(ptr_id))?;
                     this.write_pointer(res, dest)?;
                     // this.write_internal_C_ptr(res, dest, def_id)?;
                     return Ok(());

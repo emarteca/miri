@@ -95,7 +95,8 @@ pub enum MiriMemoryKind {
     /// This memory may leak.
     Tls,
     /// Internal C representation
-    CInternal,
+    /// stores the key (in the memory map) of the corresponding C pointer wrapper object
+    CInternal(u64),
 }
 
 impl From<MiriMemoryKind> for MemoryKind<MiriMemoryKind> {
@@ -112,7 +113,7 @@ impl MayLeak for MiriMemoryKind {
         match self {
             Rust | C | WinHeap | Runtime => false,
             Machine | Global | ExternStatic | Tls => true,
-            CInternal => todo!(),
+            CInternal(_) => todo!(),
         }
     }
 }
@@ -129,7 +130,7 @@ impl fmt::Display for MiriMemoryKind {
             Global => write!(f, "global (static or const)"),
             ExternStatic => write!(f, "extern static"),
             Tls => write!(f, "thread-local static"),
-            CInternal => write!(f, "C internal memory rep"),
+            CInternal(_) => write!(f, "C internal memory rep"),
         }
     }
 }
@@ -701,7 +702,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         };
 
         let is_internal_C_ptr = match kind {
-            MemoryKind::Machine(MiriMemoryKind::CInternal) => true, 
+            MemoryKind::Machine(MiriMemoryKind::CInternal(_)) => true, 
             _ => false,
         };
 
@@ -791,7 +792,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         range: AllocRange,
     ) -> InterpResult<'tcx> {
         if alloc_extra.is_internal_C_ptr {
-            println!("oh hello -- reading")
+            println!("oh hello -- reading");
             // read the pointer to get the location of the actual C pointer in the machine map
             // let ptr = this.read_pointer(ptr)?;
         }

@@ -602,7 +602,7 @@ impl Stacks {
             ) => (extra.base_tag(id), Permission::SharedReadWrite),
             // Heap allocations we only track precisely when raw pointers are tagged, for now.
             MemoryKind::Machine(
-                MiriMemoryKind::Rust | MiriMemoryKind::C | MiriMemoryKind::WinHeap | MiriMemoryKind::CInternal, 
+                MiriMemoryKind::Rust | MiriMemoryKind::C | MiriMemoryKind::WinHeap | MiriMemoryKind::CInternal(_), 
             ) => { // TODO ellen!
                 let tag =
                     if extra.tag_raw { extra.base_tag(id) } else { extra.base_tag_untagged(id) };
