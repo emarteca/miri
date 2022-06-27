@@ -117,7 +117,7 @@ pub trait CPointerWrapper: std::fmt::Debug {
 
 #[derive(Debug)]
 pub struct MutableCPointerWrapper<T> {
-    pub data: *mut T,
+    pub c_ptr: *mut T,
 }
 
 /// Representation of *mut <CType> 
@@ -461,14 +461,14 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         ret: mir::BasicBlock,
     ) -> InterpResult<'tcx, EmulateByNameResult<'mir, 'tcx>> {
         let this = self.eval_context_mut();
-
+        
         let tcx = this.tcx.tcx;
 
         // first deal with any external C functions in linked .so files
         if let Some(local_id) = def_id.as_local() {
             if let Some(extern_c_fct_rep) = ExternalCFuncDeclRep::from_hir_node(
                 &tcx.hir().get(tcx.hir().local_def_id_to_hir_id(local_id)), link_name) {
-                    if let Ok(_) = this.call_and_add_external_C_fct_to_context( extern_c_fct_rep, dest, args) {
+                    if let Ok(_) = this.call_and_add_external_C_fct_to_context( extern_c_fct_rep, dest, args, def_id) {
                         return Ok(EmulateByNameResult::ExecutedExternalCCall);
                     } 
             }

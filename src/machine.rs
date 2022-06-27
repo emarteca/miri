@@ -94,6 +94,8 @@ pub enum MiriMemoryKind {
     /// Memory for thread-local statics.
     /// This memory may leak.
     Tls,
+    /// Internal C representation
+    CInternal,
 }
 
 impl From<MiriMemoryKind> for MemoryKind<MiriMemoryKind> {
@@ -110,6 +112,7 @@ impl MayLeak for MiriMemoryKind {
         match self {
             Rust | C | WinHeap | Runtime => false,
             Machine | Global | ExternStatic | Tls => true,
+            CInternal => todo!(),
         }
     }
 }
@@ -126,6 +129,7 @@ impl fmt::Display for MiriMemoryKind {
             Global => write!(f, "global (static or const)"),
             ExternStatic => write!(f, "extern static"),
             Tls => write!(f, "thread-local static"),
+            CInternal => write!(f, "C internal memory rep"),
         }
     }
 }
@@ -200,6 +204,8 @@ pub struct AllocExtra {
     /// Weak memory emulation via the use of store buffers,
     ///  this is only added if it is enabled.
     pub weak_memory: Option<weak_memory::AllocExtra>,
+    /// Internal representation/interface to C pointers
+    pub is_internal_C_ptr: bool,
 }
 
 /// Precomputed layouts of primitive types
@@ -423,10 +429,11 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
         self.extern_c_fct_definitions.get(&link_name)
     }
 
-    pub fn add_internal_C_pointer_wrapper(&mut self, pointer_wrapper: Box<dyn CPointerWrapper>) -> InterpResult<'tcx> {
-        let next_id = AllocId(NonZeroU64::new((self.internal_C_pointer_wrappers.len() + 1) as u64).unwrap());
+    pub fn add_internal_C_pointer_wrapper(&mut self, pointer_wrapper: Box<dyn CPointerWrapper>) -> InterpResult<'tcx, u64> {
+        let next_ind = (self.internal_C_pointer_wrappers.len() + 1) as u64;
+        let next_id = AllocId(NonZeroU64::new(next_ind).unwrap());
         self.internal_C_pointer_wrappers.try_insert(next_id, pointer_wrapper).unwrap();
-        Ok(())
+        Ok(next_ind)
     }
 
     pub fn get_internal_C_pointer_wrapper(&self, alloc_id: AllocId) -> Option<&Box<dyn CPointerWrapper>>{
@@ -650,12 +657,21 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         }
     }
 
+    // fn load_mir(
+    //     ecx: &InterpCx<'mir, 'tcx, Self>,
+    //     instance: ty::InstanceDef<'tcx>,
+    // ) -> InterpResult<'tcx, &'tcx mir::Body<'tcx>> {
+    //     println!("FUCK OFF: {:?}", instance);
+    //     Ok(ecx.tcx.instance_mir(instance))
+    // }
+
     fn init_allocation_extra<'b>(
         ecx: &MiriEvalContext<'mir, 'tcx>,
         id: AllocId,
         alloc: Cow<'b, Allocation>,
         kind: Option<MemoryKind<Self::MemoryKind>>,
     ) -> Cow<'b, Allocation<Self::PointerTag, Self::AllocExtra>> {
+
         if ecx.machine.tracked_alloc_ids.contains(&id) {
             register_diagnostic(NonHaltingDiagnostic::CreatedAlloc(id));
         }
@@ -683,12 +699,19 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         } else {
             None
         };
+
+        let is_internal_C_ptr = match kind {
+            MemoryKind::Machine(MiriMemoryKind::CInternal) => true, 
+            _ => false,
+        };
+
         let alloc: Allocation<Tag, Self::AllocExtra> = alloc.convert_tag_add_extra(
             &ecx.tcx,
             AllocExtra {
                 stacked_borrows: stacks,
                 data_race: race_alloc,
                 weak_memory: buffer_alloc,
+                is_internal_C_ptr: is_internal_C_ptr,
             },
             |ptr| Evaluator::tag_alloc_base_pointer(ecx, ptr),
         );
@@ -767,6 +790,11 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         (alloc_id, tag): (AllocId, Self::TagExtra),
         range: AllocRange,
     ) -> InterpResult<'tcx> {
+        if alloc_extra.is_internal_C_ptr {
+            println!("oh hello -- reading")
+            // read the pointer to get the location of the actual C pointer in the machine map
+            // let ptr = this.read_pointer(ptr)?;
+        }
         if let Some(data_race) = &alloc_extra.data_race {
             data_race.read(alloc_id, range, machine.data_race.as_ref().unwrap())?;
         }
@@ -793,6 +821,9 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         (alloc_id, tag): (AllocId, Self::TagExtra),
         range: AllocRange,
     ) -> InterpResult<'tcx> {
+        if alloc_extra.is_internal_C_ptr {
+            println!("oh hello -- writing")
+        }
         if let Some(data_race) = &mut alloc_extra.data_race {
             data_race.write(alloc_id, range, machine.data_race.as_mut().unwrap())?;
         }

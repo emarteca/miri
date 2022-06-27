@@ -167,6 +167,19 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         self.eval_context_mut().write_scalar(val, dest)
     }
 
+    /// Function to store a MIRI representation of a C pointer (i.e., pointer to some memory 
+    /// from an external C function that's been called from this program).
+    /// TODO ellen! clean up this documentation if it ends up changing
+    /// This corresponds to storing the ID of the pointer as it is stored in the evaluation 
+    /// context's external C pointer map. Then when this memory is accessed <something> will 
+    /// happen with the pointer, as its wrapper object is available from the map.
+    fn write_internal_C_ptr(&mut self, ptr: Pointer<Option<Tag>>, dest: &PlaceTy<'tcx, Tag>, def_id: DefId) -> InterpResult<'tcx> {
+        // self.eval_context_mut().write_int(ptr_id, dest)?;
+        // let pls = self.eval_context_mut().tcx.create_static_alloc(def_id);
+        // println!("!!! {:?}", dest.assert_mem_place());
+        Ok(())
+    } 
+
     /// Write the first N fields of the given place.
     fn write_int_fields(
         &mut self,
@@ -743,7 +756,8 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
     }
 
     fn call_and_add_external_C_fct_to_context(&mut self, 
-        external_fct_defn: ExternalCFuncDeclRep<'tcx>, dest: &PlaceTy<'tcx, Tag>, args: &[OpTy<'tcx, Tag>]) -> InterpResult<'tcx, ()> {
+        external_fct_defn: ExternalCFuncDeclRep<'tcx>, dest: &PlaceTy<'tcx, Tag>, args: &[OpTy<'tcx, Tag>], 
+        def_id: DefId,) -> InterpResult<'tcx, ()> {
         
         let this = self.eval_context_mut();
         let link_name = external_fct_defn.link_name;
@@ -1029,15 +1043,20 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                         },..
                     },..),..
                 }) => {
-                    println!("UMMM: {:?}", external_fct_defn.output_type );
                     let ret_ptr = call::<*mut i32>(ptr, &libffi_args.as_slice());
-                    let ret_ptr_internal_wrapper = MutableCPointerWrapper::<i32>{ data: ret_ptr};
-                    this.machine.add_internal_C_pointer_wrapper(Box::new(ret_ptr_internal_wrapper));
+                    let ret_ptr_internal_wrapper = MutableCPointerWrapper::<i32>{ c_ptr: ret_ptr};
+                    let ptr_id = this.machine.add_internal_C_pointer_wrapper(Box::new(ret_ptr_internal_wrapper))?;
+                    // println!("{:?}", ptr_id.to_machine_usize(this)?);
+                    const SIZE_IN_BYTES: u64 = 4;
+                    let res = this.malloc(SIZE_IN_BYTES, /*zero_init:*/ false, MiriMemoryKind::CInternal)?;
+                    this.write_pointer(res, dest)?;
+                    // this.write_internal_C_ptr(res, dest, def_id)?;
+                    return Ok(());
                     // TODO ellen! we've created the internal C pointer wrapper to track this
                     // but we need to actually write it somewhere: implement write_internal_C_ptr
                     // the main thing is that we recognize when we access it later
-                    println!("value first: {:?}", *ret_ptr);
-                    throw_unsup_format!("UNSUPPORTED RETURN TYPE -- CURRENTLY FIGURING OUT POINTERS");
+                    // println!("value first: {:?}", *ret_ptr);
+                    // throw_unsup_format!("UNSUPPORTED RETURN TYPE -- CURRENTLY FIGURING OUT POINTERS");
                 },
                 _ => {
                     throw_unsup_format!("UNSUPPORTED RETURN TYPE -- NOT VOID");

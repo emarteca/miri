@@ -816,7 +816,7 @@ impl VClockAlloc {
         let (alloc_timestamp, alloc_index) = match kind {
             // User allocated and stack memory should track allocation.
             MemoryKind::Machine(
-                MiriMemoryKind::Rust | MiriMemoryKind::C | MiriMemoryKind::WinHeap,
+                MiriMemoryKind::Rust | MiriMemoryKind::C | MiriMemoryKind::WinHeap | MiriMemoryKind::CInternal, // TODO ellen!
             )
             | MemoryKind::Stack => {
                 let (alloc_index, clocks) = global.current_thread_state();
@@ -832,6 +832,7 @@ impl VClockAlloc {
                 | MiriMemoryKind::Tls,
             )
             | MemoryKind::CallerLocation => (0, VectorIdx::MAX_INDEX),
+            | MemoryKind::Machine(CInternal) => todo!(),
         };
         VClockAlloc {
             alloc_ranges: RefCell::new(RangeMap::new(
