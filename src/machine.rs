@@ -792,8 +792,8 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
     ) -> InterpResult<'tcx> {
         if let Some(key) = alloc_extra.internal_C_ptr_key {
             let ptr_rep = machine.get_internal_C_pointer_wrapper(key).unwrap();
-            ptr_rep.sync_C_to_miri();
-            println!("oh hello -- reading: {:?}", ptr_rep);
+            ptr_rep.sync_C_to_miri(alloc_id, machine);
+            println!("oh hello -- reading: {:?}", Pointer::from(alloc_id));
             // read the pointer to get the location of the actual C pointer in the machine map
             // let ptr = this.read_pointer(ptr)?;
         }

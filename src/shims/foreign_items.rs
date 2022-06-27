@@ -136,10 +136,10 @@ impl CPointerWrapper {
 
     }
 
-    pub fn sync_C_to_miri(&self) {
+    pub fn sync_C_to_miri(&self, alloc_id: AllocId) {
         match self {
             CPointerWrapper::Mutable(mut_ptr) => {
-                mut_ptr.sync_C_to_miri()
+                mut_ptr.sync_C_to_miri(alloc_id)
             },
             _ => {
                 panic!("Shouldn't happen -- we've so far only implemented MutableCPointerWrapper for i32s");
@@ -153,11 +153,14 @@ impl MutableCPointerWrapper {
 
     }
 
-    pub fn sync_C_to_miri(&self) {
+    pub fn sync_C_to_miri(&self, alloc_id: AllocId, machine: Machine) {
         match self {
             MutableCPointerWrapper::I32(c_ptr) => {
                 unsafe {
                     let value = **c_ptr;
+                    let miri_ptr = Pointer::from(alloc_id);
+                    // let res = this.malloc_value(/* ne == native endian */ &c_i32.to_ne_bytes(), MiriMemoryKind::CInternal(ptr_id))?;
+                    
                     println!("value: {:?}", value);
                 }
             },
