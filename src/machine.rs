@@ -31,7 +31,7 @@ use rustc_target::spec::abi::Abi;
 use crate::{
     concurrency::{data_race, weak_memory},
     shims::unix::FileHandler,
-    shims::foreign_items::CPointerWrapper,
+    shims::foreign_items::{CPointerWrapper, MutableCPointerWrapper},
     *,
 };
 
@@ -206,7 +206,7 @@ pub struct AllocExtra {
     ///  this is only added if it is enabled.
     pub weak_memory: Option<weak_memory::AllocExtra>,
     /// Internal representation/interface to C pointers
-    pub is_internal_C_ptr: bool,
+    pub internal_C_ptr_key: Option<u64>,
 }
 
 /// Precomputed layouts of primitive types
@@ -355,7 +355,7 @@ pub struct Evaluator<'mir, 'tcx> {
     pub external_c_so_file: Option<String>,
 
     /// map of AllocIDs to the internal wrappers for C pointers
-    pub internal_C_pointer_wrappers: FxHashMap<AllocId, Box<dyn CPointerWrapper>>,
+    pub internal_C_pointer_wrappers: FxHashMap<u64, CPointerWrapper>,
 }
 
 impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
@@ -430,15 +430,14 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
         self.extern_c_fct_definitions.get(&link_name)
     }
 
-    pub fn add_internal_C_pointer_wrapper(&mut self, pointer_wrapper: Box<dyn CPointerWrapper>) -> InterpResult<'tcx, u64> {
+    pub fn add_internal_C_pointer_wrapper(&mut self, pointer_wrapper: CPointerWrapper) -> InterpResult<'tcx, u64> {
         let next_ind = (self.internal_C_pointer_wrappers.len() + 1) as u64;
-        let next_id = AllocId(NonZeroU64::new(next_ind).unwrap());
-        self.internal_C_pointer_wrappers.try_insert(next_id, pointer_wrapper).unwrap();
+        self.internal_C_pointer_wrappers.try_insert(next_ind, pointer_wrapper).unwrap();
         Ok(next_ind)
     }
 
-    pub fn get_internal_C_pointer_wrapper(&self, alloc_id: AllocId) -> Option<&Box<dyn CPointerWrapper>>{
-        self.internal_C_pointer_wrappers.get(&alloc_id)
+    pub fn get_internal_C_pointer_wrapper(&self, alloc_ind: u64) -> Option<&CPointerWrapper>{
+        self.internal_C_pointer_wrappers.get(&alloc_ind)
     }
 
     pub(crate) fn late_init(
@@ -701,9 +700,9 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
             None
         };
 
-        let is_internal_C_ptr = match kind {
-            MemoryKind::Machine(MiriMemoryKind::CInternal(_)) => true, 
-            _ => false,
+        let internal_C_ptr_key = match kind {
+            MemoryKind::Machine(MiriMemoryKind::CInternal(key)) => Some(key), 
+            _ => None,
         };
 
         let alloc: Allocation<Tag, Self::AllocExtra> = alloc.convert_tag_add_extra(
@@ -712,7 +711,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
                 stacked_borrows: stacks,
                 data_race: race_alloc,
                 weak_memory: buffer_alloc,
-                is_internal_C_ptr: is_internal_C_ptr,
+                internal_C_ptr_key: internal_C_ptr_key,
             },
             |ptr| Evaluator::tag_alloc_base_pointer(ecx, ptr),
         );
@@ -791,8 +790,19 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         (alloc_id, tag): (AllocId, Self::TagExtra),
         range: AllocRange,
     ) -> InterpResult<'tcx> {
-        if alloc_extra.is_internal_C_ptr {
-            println!("oh hello -- reading");
+        if let Some(key) = alloc_extra.internal_C_ptr_key {
+            let ptr_rep = machine.get_internal_C_pointer_wrapper(key).unwrap();
+            match *ptr_rep {
+                CPointerWrapper::Mutable(MutableCPointerWrapper::I32(c_ptr)) => {
+                    unsafe {
+                        println!("ummm: {:?}", *c_ptr);
+                    }
+                },
+                _ => {
+                    panic!("Shouldn't happen -- we've so far only implemented MutableCPointerWrapper");
+                }
+            }
+            println!("oh hello -- reading: {:?}", ptr_rep);
             // read the pointer to get the location of the actual C pointer in the machine map
             // let ptr = this.read_pointer(ptr)?;
         }
@@ -822,7 +832,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         (alloc_id, tag): (AllocId, Self::TagExtra),
         range: AllocRange,
     ) -> InterpResult<'tcx> {
-        if alloc_extra.is_internal_C_ptr {
+        if let Some(key) = alloc_extra.internal_C_ptr_key {
             println!("oh hello -- writing")
         }
         if let Some(data_race) = &mut alloc_extra.data_race {

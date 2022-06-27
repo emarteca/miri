@@ -1044,8 +1044,8 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     },..),..
                 }) => {
                     let ret_ptr = call::<*mut i32>(ptr, &libffi_args.as_slice());
-                    let ret_ptr_internal_wrapper = MutableCPointerWrapper::<i32>{ c_ptr: ret_ptr};
-                    let ptr_id = this.machine.add_internal_C_pointer_wrapper(Box::new(ret_ptr_internal_wrapper))?;
+                    let ret_ptr_internal_wrapper = CPointerWrapper::Mutable(MutableCPointerWrapper::I32(ret_ptr));
+                    let ptr_id = this.machine.add_internal_C_pointer_wrapper(ret_ptr_internal_wrapper)?;
                     // println!("{:?}", ptr_id.to_machine_usize(this)?);
                     const SIZE_IN_BYTES: u64 = 4;
                     let res = this.malloc(SIZE_IN_BYTES, /*zero_init:*/ false, MiriMemoryKind::CInternal(ptr_id))?;

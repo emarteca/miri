@@ -108,35 +108,37 @@ impl<'hir> ExternalCFuncDeclRep<'hir> {
     }
 }
 
+#[derive(std::fmt::Debug)]
+// TODO ellen! add const
 /// Internal C pointer wrapper -- will deal with syncing between C and Rust
-// note: requires Debug as a supertrait so it can be unwrapped
-pub trait CPointerWrapper: std::fmt::Debug {
-    fn sync_miri_to_C(&self);
-    fn sync_C_to_miri(&self);
+pub enum CPointerWrapper {
+    Mutable(MutableCPointerWrapper),
 }
 
-#[derive(Debug)]
-pub struct MutableCPointerWrapper<T> {
-    pub c_ptr: *mut T,
-}
-
+// TODO ellen! add other types
+#[derive(std::fmt::Debug)]
 /// Representation of *mut <CType> 
-impl<T: std::fmt::Debug> CPointerWrapper for MutableCPointerWrapper<T> {
-    
-    fn sync_miri_to_C(&self) {
-
-    }
-
-    fn sync_C_to_miri(&self) {
-
-    }
+pub enum MutableCPointerWrapper {
+    I32(*mut i32),
 }
+
 
 /// Representation of *const <CType> 
 // TODO ellen! consts
-// pub struct ConstCPointerWrapper<T>: CPointerWrapper<T> {
+// pub enum ConstCPointerWrapper {
     
 // }
+
+// TODO ellen!
+impl CPointerWrapper {
+    pub fn sync_miri_to_C(&self) {
+
+    }
+
+    pub fn sync_C_to_miri(&self) {
+
+    }
+}
 
 impl<'mir, 'tcx: 'mir> EvalContextExt<'mir, 'tcx> for crate::MiriEvalContext<'mir, 'tcx> {}
 pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx> {
