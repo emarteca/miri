@@ -1046,18 +1046,12 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     let ret_ptr = call::<*mut i32>(ptr, &libffi_args.as_slice());
                     let ret_ptr_internal_wrapper = CPointerWrapper::Mutable(MutableCPointerWrapper::I32(ret_ptr));
                     let ptr_id = this.machine.add_internal_C_pointer_wrapper(ret_ptr_internal_wrapper)?;
-                    // println!("{:?}", ptr_id.to_machine_usize(this)?);
-                    const SIZE_IN_BYTES: u64 = 4;
-                    let res = this.malloc(SIZE_IN_BYTES, /*zero_init:*/ false, MiriMemoryKind::CInternal(ptr_id))?;
+                    // read the value from the pointer and store it in mem
+                    let c_i32 = *ret_ptr;
+                    let res = this.malloc_value(/* ne == native endian */ &c_i32.to_ne_bytes(), MiriMemoryKind::CInternal(ptr_id))?;
                     this.write_pointer(res, dest)?;
-                    // this.write_internal_C_ptr(res, dest, def_id)?;
                     return Ok(());
-                    // TODO ellen! we've created the internal C pointer wrapper to track this
-                    // but we need to actually write it somewhere: implement write_internal_C_ptr
-                    // the main thing is that we recognize when we access it later
-                    // println!("value first: {:?}", *ret_ptr);
-                    // throw_unsup_format!("UNSUPPORTED RETURN TYPE -- CURRENTLY FIGURING OUT POINTERS");
-                },
+                    },
                 _ => {
                     throw_unsup_format!("UNSUPPORTED RETURN TYPE -- NOT VOID");
                 }

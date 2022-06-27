@@ -113,7 +113,7 @@ impl MayLeak for MiriMemoryKind {
         match self {
             Rust | C | WinHeap | Runtime => false,
             Machine | Global | ExternStatic | Tls => true,
-            CInternal(_) => todo!(),
+            CInternal(_) => true,
         }
     }
 }

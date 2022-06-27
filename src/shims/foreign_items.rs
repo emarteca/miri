@@ -5,6 +5,7 @@ use log::trace;
 use rustc_apfloat::{Float, ieee::{IeeeFloat, SingleS, DoubleS}};
 use rustc_ast::{
     expand::allocator::AllocatorKind,
+    ast::Mutability,
 };
 use rustc_hir::{
     self as hir,
@@ -217,6 +218,14 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
             }
             Ok(ptr.into())
         }
+    }
+
+    fn malloc_value(&mut self, bytes: &[u8], kind: MiriMemoryKind) -> InterpResult<'tcx, Pointer<Option<Tag>>> {
+        let this = self.eval_context_mut();
+        let align = this.min_align(bytes.len() as u64, kind);
+        let mutability = Mutability::Mut; // TODO ellen! for now all mutable, so we can resync with C
+        let ptr = this.allocate_bytes_ptr(bytes, align, kind.into(), mutability);
+        Ok(ptr.into())
     }
 
     fn free(&mut self, ptr: Pointer<Option<Tag>>, kind: MiriMemoryKind) -> InterpResult<'tcx> {
