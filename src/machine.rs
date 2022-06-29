@@ -206,7 +206,7 @@ pub struct AllocExtra {
     ///  this is only added if it is enabled.
     pub weak_memory: Option<weak_memory::AllocExtra>,
     /// Internal representation/interface to C pointers
-    pub internal_C_ptr_key: Option<u64>,
+    pub foreign_items: Option<shims::foreign_items::AllocExtra>,
 }
 
 /// Precomputed layouts of primitive types
@@ -689,8 +689,8 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
             None
         };
 
-        let internal_C_ptr_key = match kind {
-            MemoryKind::Machine(MiriMemoryKind::CInternal(key)) => Some(key), 
+        let foreign_items = match kind {
+            MemoryKind::Machine(MiriMemoryKind::CInternal(key)) => Some(shims::foreign_items::AllocExtra::new(key)), 
             _ => None,
         };
 
@@ -700,7 +700,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
                 stacked_borrows: stacks,
                 data_race: race_alloc,
                 weak_memory: buffer_alloc,
-                internal_C_ptr_key: internal_C_ptr_key,
+                foreign_items,
             },
             |ptr| Evaluator::tag_alloc_base_pointer(ecx, ptr),
         );
@@ -779,7 +779,8 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         (alloc_id, tag): (AllocId, Self::TagExtra),
         range: AllocRange,
     ) -> InterpResult<'tcx> {
-        if let Some(key) = alloc_extra.internal_C_ptr_key {
+        if let Some(foreign_items) = &alloc_extra.foreign_items {
+            let key = foreign_items.get_internal_C_ptr_key();
             let ptr_rep = machine.foreign_items.borrow().get_internal_C_pointer_wrapper(key).unwrap();
             // ptr_rep.sync_C_to_miri(alloc_id, machine);
             println!("oh hello -- reading: {:?}", Pointer::from(alloc_id));
@@ -812,8 +813,8 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         (alloc_id, tag): (AllocId, Self::TagExtra),
         range: AllocRange,
     ) -> InterpResult<'tcx> {
-        if let Some(key) = alloc_extra.internal_C_ptr_key {
-            println!("oh hello -- writing")
+        if let Some(foreign_items) = &alloc_extra.foreign_items {
+            println!("oh hello -- writing");
         }
         if let Some(data_race) = &mut alloc_extra.data_race {
             data_race.write(alloc_id, range, machine.data_race.as_mut().unwrap())?;

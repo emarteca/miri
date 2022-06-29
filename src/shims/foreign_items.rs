@@ -36,6 +36,24 @@ use crate::helpers::{
 };
 use crate::*;
 
+#[derive(Debug, Clone)]
+pub struct AllocExtra {
+    internal_C_ptr_key: u64,
+}
+
+impl AllocExtra {
+
+    pub fn new(internal_C_ptr_key: u64) -> Self {
+        Self {
+            internal_C_ptr_key,
+        }
+    }
+
+    pub fn get_internal_C_ptr_key(&self) -> u64 {
+        self.internal_C_ptr_key
+    }
+}
+
 /// Returned by `emulate_foreign_item_by_name`.
 pub enum EmulateByNameResult<'mir, 'tcx> {
     /// The caller is expected to jump to the return block.
