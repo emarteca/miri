@@ -249,6 +249,7 @@ pub struct Evaluator<'mir, 'tcx> {
     pub stacked_borrows: Option<stacked_borrows::GlobalState>,
     pub data_race: Option<data_race::GlobalState>,
     pub intptrcast: intptrcast::GlobalState,
+    pub foreign_items: shims::foreign_items::GlobalState,
 
     /// Environment variables set by `setenv`.
     /// Miri does not expose env vars from the host to the emulated program.
@@ -353,9 +354,6 @@ pub struct Evaluator<'mir, 'tcx> {
 
     /// Path to shared object file for loading external C functions
     pub external_c_so_file: Option<String>,
-
-    /// map of AllocIDs to the internal wrappers for C pointers
-    pub internal_C_pointer_wrappers: FxHashMap<u64, CPointerWrapper>,
 }
 
 impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
@@ -382,6 +380,7 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
             stacked_borrows,
             data_race,
             intptrcast: RefCell::new(intptrcast::GlobalStateInner::new(config)),
+            foreign_items: RefCell::new(shims::foreign_items::GlobalStateInner::new()),
             // `env_vars` depends on a full interpreter so we cannot properly initialize it yet.
             env_vars: EnvVars::default(),
             argc: None,
@@ -415,7 +414,7 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
             preemption_rate: config.preemption_rate,
             extern_c_fct_definitions: FxHashMap::default(),
             external_c_so_file: config.external_c_so_file.clone(),
-            internal_C_pointer_wrappers: FxHashMap::default(),
+            // internal_C_pointer_wrappers: FxHashMap::default(),
         }
     }
 
@@ -428,16 +427,6 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
 
     pub fn get_extern_c_fct_defn(&self, link_name: Symbol) -> Option<&CodePtr>{
         self.extern_c_fct_definitions.get(&link_name)
-    }
-
-    pub fn add_internal_C_pointer_wrapper(&mut self, pointer_wrapper: CPointerWrapper) -> InterpResult<'tcx, u64> {
-        let next_ind = (self.internal_C_pointer_wrappers.len() + 1) as u64;
-        self.internal_C_pointer_wrappers.try_insert(next_ind, pointer_wrapper).unwrap();
-        Ok(next_ind)
-    }
-
-    pub fn get_internal_C_pointer_wrapper(&self, alloc_ind: u64) -> Option<&CPointerWrapper>{
-        self.internal_C_pointer_wrappers.get(&alloc_ind)
     }
 
     pub(crate) fn late_init(
@@ -791,8 +780,8 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         range: AllocRange,
     ) -> InterpResult<'tcx> {
         if let Some(key) = alloc_extra.internal_C_ptr_key {
-            let ptr_rep = machine.get_internal_C_pointer_wrapper(key).unwrap();
-            ptr_rep.sync_C_to_miri(alloc_id, machine);
+            let ptr_rep = machine.foreign_items.borrow().get_internal_C_pointer_wrapper(key).unwrap();
+            // ptr_rep.sync_C_to_miri(alloc_id, machine);
             println!("oh hello -- reading: {:?}", Pointer::from(alloc_id));
             // read the pointer to get the location of the actual C pointer in the machine map
             // let ptr = this.read_pointer(ptr)?;

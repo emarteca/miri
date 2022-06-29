@@ -1045,7 +1045,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     let ret_ptr = call::<*mut i32>(ptr, &libffi_args.as_slice());
                     let ret_ptr_internal_wrapper = CPointerWrapper::Mutable(MutableCPointerWrapper::I32(ret_ptr));
-                    let ptr_id = this.machine.add_internal_C_pointer_wrapper(ret_ptr_internal_wrapper)?;
+                    let ptr_id = this.machine.foreign_items.borrow_mut().add_internal_C_pointer_wrapper(ret_ptr_internal_wrapper);
                     // read the value from the pointer and store it in mem
                     let c_i32 = *ret_ptr;
                     let res = this.malloc_value(/* ne == native endian */ &c_i32.to_ne_bytes(), MiriMemoryKind::CInternal(ptr_id))?;

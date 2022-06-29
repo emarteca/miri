@@ -1,8 +1,10 @@
 use std::{collections::hash_map::Entry, iter};
+use std::cell::RefCell;
 
 use log::trace;
 
 use rustc_apfloat::{Float, ieee::{IeeeFloat, SingleS, DoubleS}};
+use rustc_data_structures::fx::FxHashMap;
 use rustc_ast::{
     expand::allocator::AllocatorKind,
     ast::Mutability,
@@ -59,6 +61,32 @@ pub struct ExternalCFuncDeclRep<'hir> {
     /// Return type
     pub output_type: &'hir FnRetTy<'hir>,
 }
+
+#[derive(Debug)]
+pub struct GlobalStateInner {
+    internal_C_pointer_wrappers: FxHashMap<u64, CPointerWrapper>,
+}
+
+impl GlobalStateInner {
+    pub fn new() -> Self {
+        Self {
+            internal_C_pointer_wrappers: FxHashMap::default(),
+        }
+    }
+
+    pub fn add_internal_C_pointer_wrapper(&mut self, pointer_wrapper: CPointerWrapper) -> u64 {
+        let next_ind = (self.internal_C_pointer_wrappers.len() + 1) as u64;
+        self.internal_C_pointer_wrappers.try_insert(next_ind, pointer_wrapper).unwrap();
+        next_ind
+    }
+
+    pub fn get_internal_C_pointer_wrapper(&self, alloc_ind: u64) -> Option<&CPointerWrapper>{
+        self.internal_C_pointer_wrappers.get(&alloc_ind)
+    }
+}
+
+/// We need interior mutable access to the global state.
+pub type GlobalState = RefCell<GlobalStateInner>;
 
 #[derive(Debug, Clone)]
 // TODO ellen! extend with pointers
@@ -153,7 +181,7 @@ impl MutableCPointerWrapper {
 
     }
 
-    pub fn sync_C_to_miri(&self, alloc_id: AllocId, machine: Machine) {
+    pub fn sync_C_to_miri(&self, alloc_id: AllocId) {
         match self {
             MutableCPointerWrapper::I32(c_ptr) => {
                 unsafe {
