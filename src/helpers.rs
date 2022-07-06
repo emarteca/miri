@@ -755,9 +755,35 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         })
     }
 
+    // iterate over all of the memory locations that are marked CInternal 
+    // and sync them from their C locations
+    fn sync_C_to_miri(&mut self) -> InterpResult<'tcx, ()> {
+        let this = self.eval_context_mut();
+
+        // TODO ellen! will we ever need to reallocate here?
+        let c_mems = this.machine.foreign_items.borrow().get_internal_C_pointer_wrappers();
+        for (ptr_id, cptr) in c_mems {
+            unsafe {
+                match cptr {
+                    CPointerWrapper::Mutable(MutableCPointerWrapper::I32(rptr)) => {
+                        // read the value from the pointer and store it in mem
+                        let c_i32 = *rptr;
+                        this.malloc_value(/* ne == native endian */ &c_i32.to_ne_bytes(), MiriMemoryKind::CInternal(ptr_id))?;
+                        println!("READING FROM C AGAIN: {:?}", c_i32);
+                    },
+                    _ => {}
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
     fn call_and_add_external_C_fct_to_context(&mut self, 
         external_fct_defn: ExternalCFuncDeclRep<'tcx>, dest: &PlaceTy<'tcx, Tag>, args: &[OpTy<'tcx, Tag>], 
         def_id: DefId,) -> InterpResult<'tcx, ()> {
+
+        self.sync_C_to_miri();
         
         let this = self.eval_context_mut();
         let link_name = external_fct_defn.link_name;
@@ -766,6 +792,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         // get the function arguments
         let mut libffi_args = Vec::<(Box<dyn Any>, CArg)>::with_capacity(args.len());
         for (cur_arg, arg_type) in args.iter().zip(external_fct_defn.inputs_types.iter()) {
+            // let arg_ptr = this.read_pointer(cur_arg);
             match this.read_scalar(cur_arg) {
                 Ok(k) => {
                     // the ints
@@ -895,7 +922,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     },
                     _ => {
                         // should be unreachable
-                        println!("UMMM: {:?}", cur_arg);
                         panic!("Trying to call external function with unsupported type: should have already bailed");
                     }
                 }

@@ -101,6 +101,10 @@ impl GlobalStateInner {
     pub fn get_internal_C_pointer_wrapper(&self, alloc_ind: u64) -> Option<&CPointerWrapper>{
         self.internal_C_pointer_wrappers.get(&alloc_ind)
     }
+
+    pub fn get_internal_C_pointer_wrappers(&self) -> FxHashMap<u64, CPointerWrapper> {
+        self.internal_C_pointer_wrappers.clone()
+    }
 }
 
 /// We need interior mutable access to the global state.
@@ -155,7 +159,7 @@ impl<'hir> ExternalCFuncDeclRep<'hir> {
     }
 }
 
-#[derive(std::fmt::Debug)]
+#[derive(std::fmt::Debug, Clone)]
 // TODO ellen! add const
 /// Internal C pointer wrapper -- will deal with syncing between C and Rust
 pub enum CPointerWrapper {
@@ -163,7 +167,7 @@ pub enum CPointerWrapper {
 }
 
 // TODO ellen! add other types
-#[derive(std::fmt::Debug)]
+#[derive(std::fmt::Debug, Clone)]
 /// Representation of *mut <CType> 
 pub enum MutableCPointerWrapper {
     I32(*mut i32),

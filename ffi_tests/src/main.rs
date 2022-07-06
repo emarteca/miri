@@ -23,6 +23,8 @@ fn main() {
 
                     let ptr = pointer_test();
                     println!("{:?}", *ptr);
+                    
+                    let ptr2 = pointer_test();
         }
         println!("x: {:?}", x);
         println!("rjeiworjweio");

@@ -496,11 +496,13 @@ impl<'mir, 'tcx> Evaluator<'mir, 'tcx> {
 
 /// A rustc InterpCx for Miri.
 pub type MiriEvalContext<'mir, 'tcx> = InterpCx<'mir, 'tcx, Evaluator<'mir, 'tcx>>;
+use crate::rustc_target::abi::HasDataLayout;
 
 /// A little trait that's useful to be inherited by extension traits.
 pub trait MiriEvalContextExt<'mir, 'tcx> {
     fn eval_context_ref<'a>(&'a self) -> &'a MiriEvalContext<'mir, 'tcx>;
     fn eval_context_mut<'a>(&'a mut self) -> &'a mut MiriEvalContext<'mir, 'tcx>;
+    // fn read_pointer(&self, op: &OpTy<'tcx, Tag>) -> InterpResult<'tcx, Pointer<Option<Tag>>>;
 }
 impl<'mir, 'tcx> MiriEvalContextExt<'mir, 'tcx> for MiriEvalContext<'mir, 'tcx> {
     #[inline(always)]
@@ -511,6 +513,12 @@ impl<'mir, 'tcx> MiriEvalContextExt<'mir, 'tcx> for MiriEvalContext<'mir, 'tcx> 
     fn eval_context_mut(&mut self) -> &mut MiriEvalContext<'mir, 'tcx> {
         self
     }
+
+
+    // fn read_pointer(&self, op: &OpTy<'tcx, Tag>) -> InterpResult<'tcx, Pointer<Option<Tag>>> {
+    //     println!("reeeeeeeeee");
+    //     self.read_pointer(&op)
+    // }
 }
 
 /// Machine hook implementations.
@@ -650,8 +658,9 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
     //     ecx: &InterpCx<'mir, 'tcx, Self>,
     //     instance: ty::InstanceDef<'tcx>,
     // ) -> InterpResult<'tcx, &'tcx mir::Body<'tcx>> {
-    //     println!("FUCK OFF: {:?}", instance);
-    //     Ok(ecx.tcx.instance_mir(instance))
+    //     let res = ecx.tcx.instance_mir(instance); 
+    //     println!("PLS: {:?} --- {:?}", instance, res);
+    //     Ok(res)
     // }
 
     fn init_allocation_extra<'b>(
