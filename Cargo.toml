@@ -18,6 +18,7 @@ test = false # we have no unit tests
 doctest = false # and no doc tests
 
 [dependencies]
+bimap = "0.6.2"
 getrandom = { version = "0.2", features = ["std"] }
 env_logger = "0.9"
 log = "0.4"

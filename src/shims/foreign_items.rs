@@ -1,5 +1,6 @@
 use std::{collections::hash_map::Entry, iter};
 use std::cell::RefCell;
+use bimap::BiMap;
 
 use log::trace;
 
@@ -83,12 +84,14 @@ pub struct ExternalCFuncDeclRep<'hir> {
 #[derive(Debug)]
 pub struct GlobalStateInner {
     internal_C_pointer_wrappers: FxHashMap<u64, CPointerWrapper>,
+    MIRI_pointers_to_C_pointers: BiMap<Pointer<Option<Tag>>, u64>,
 }
 
 impl GlobalStateInner {
     pub fn new() -> Self {
         Self {
             internal_C_pointer_wrappers: FxHashMap::default(),
+            MIRI_pointers_to_C_pointers: BiMap::default(),
         }
     }
 
@@ -98,12 +101,28 @@ impl GlobalStateInner {
         next_ind
     }
 
+    pub fn add_MIRI_pointer_to_C_pointer(&mut self, miri_ptr: Pointer<Option<Tag>>, ptr_id: u64) {
+        self.MIRI_pointers_to_C_pointers.insert(miri_ptr, ptr_id);
+    }
+
     pub fn get_internal_C_pointer_wrapper(&self, alloc_ind: u64) -> Option<&CPointerWrapper>{
         self.internal_C_pointer_wrappers.get(&alloc_ind)
     }
 
+    pub fn get_internal_C_pointer_wrapper_from_MIRI_pointer(&self, ptr: Pointer<Option<Tag>>) -> Option<&CPointerWrapper> {
+        if let Some(&ptr_id) = self.MIRI_pointers_to_C_pointers.get_by_left(&ptr) {
+            self.get_internal_C_pointer_wrapper(ptr_id)
+        } else {
+            None
+        }
+    }
+
     pub fn get_internal_C_pointer_wrappers(&self) -> FxHashMap<u64, CPointerWrapper> {
         self.internal_C_pointer_wrappers.clone()
+    }
+
+    pub fn get_MIRI_pointers_to_C_pointers(&self) -> BiMap<Pointer<Option<Tag>>, u64> {
+        self.MIRI_pointers_to_C_pointers.clone()
     }
 }
 

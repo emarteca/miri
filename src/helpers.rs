@@ -762,16 +762,52 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
 
         // TODO ellen! will we ever need to reallocate here?
         let c_mems = this.machine.foreign_items.borrow().get_internal_C_pointer_wrappers();
+        let miri_ptrs_to_c_ptrs = this.machine.foreign_items.borrow().get_MIRI_pointers_to_C_pointers();
         for (ptr_id, cptr) in c_mems {
             unsafe {
                 match cptr {
                     // TODO ellen! read the buffer_size from mem
                     CPointerWrapper::Mutable(MutableCPointerWrapper::I32(rptr), buffer_size) => {
-                        // read the value from the pointer and store it in mem
+                        // read the value from the C pointer and store it in mem
                         let c_i32 = std::slice::from_raw_parts_mut(rptr, buffer_size); 
                         let ptr_as_u8_stream = c_i32.iter().flat_map(|val| val.to_ne_bytes()).collect::<Vec<u8>>();
-                        this.malloc_value(/* ne == native endian */ &ptr_as_u8_stream, MiriMemoryKind::CInternal(ptr_id))?;
-                        println!("READING FROM C AGAIN: {:?}", c_i32);
+                        let miri_ptr = miri_ptrs_to_c_ptrs.get_by_right(&ptr_id).unwrap();
+                        // this is the same pointer as before, with the same buffer size
+                        // so let's just overwrite the old pointer 
+                        this.write_bytes_ptr((*miri_ptr).into(), ptr_as_u8_stream)?;
+                        println!("SYNCING FROM C: {:?}", c_i32);
+                    },
+                    _ => {}
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    // iterate over all of the memory locations that are marked CInternal 
+    // and sync them to their C locations
+    fn sync_miri_to_C(&self) -> InterpResult<'tcx, ()> {
+        let this = self.eval_context_ref();
+
+        // TODO ellen! will we ever need to reallocate here?
+        let c_mems = this.machine.foreign_items.borrow().get_internal_C_pointer_wrappers();
+        let miri_ptrs_to_c_ptrs = this.machine.foreign_items.borrow().get_MIRI_pointers_to_C_pointers();
+        for (ptr_id, cptr) in c_mems {
+            unsafe {
+                match cptr {
+                    CPointerWrapper::Mutable(MutableCPointerWrapper::I32(rptr), buffer_size) => {
+                        // read the value from the MIRI pointer and store it in C mem
+                        let miri_ptr = miri_ptrs_to_c_ptrs.get_by_right(&ptr_id).unwrap();
+                        let ptr_as_u8_stream = this.read_bytes_ptr((*miri_ptr).into(), Size::from_bytes(buffer_size))?;
+                        
+                        for i in 0..(buffer_size%4) as usize {
+                            let mut cur_i32: [u8;4] = Default::default();
+                            cur_i32.copy_from_slice(&ptr_as_u8_stream[i*4..(i+1)*4]);
+                            std::ptr::write(rptr.offset(i as isize), i32::from_ne_bytes(cur_i32));
+                        }
+                        
+                        println!("SYNCING TO C: {:?}", ptr_as_u8_stream);
                     },
                     _ => {}
                 }
@@ -785,7 +821,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         external_fct_defn: ExternalCFuncDeclRep<'tcx>, dest: &PlaceTy<'tcx, Tag>, args: &[OpTy<'tcx, Tag>], 
         def_id: DefId,) -> InterpResult<'tcx, ()> {
 
-        self.sync_C_to_miri();
+        self.sync_miri_to_C();
         
         let this = self.eval_context_mut();
         let link_name = external_fct_defn.link_name;
@@ -1072,8 +1108,8 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     },..),..
                 }) => {
                     let ret_ptr = call::<*mut i32>(ptr, &libffi_args.as_slice());
-                    let buffer_size = 1; // TODO ellen! get this from C, maybe instrumented malloc
-                    let ret_ptr_internal_wrapper = CPointerWrapper::Mutable(MutableCPointerWrapper::I32(ret_ptr), buffer_size);
+                    let buffer_size = 4; // TODO ellen! get this from C, maybe instrumented malloc
+                    let mut ret_ptr_internal_wrapper = CPointerWrapper::Mutable(MutableCPointerWrapper::I32(ret_ptr), buffer_size);
                     let ptr_id = this.machine.foreign_items.borrow_mut().add_internal_C_pointer_wrapper(ret_ptr_internal_wrapper);
                     // read the value from the pointer, for the specified buffer size
                     // and store it in mem
@@ -1081,6 +1117,9 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     let ptr_as_u8_stream = c_i32.iter().flat_map(|val| val.to_ne_bytes()).collect::<Vec<u8>>();
                     let res = this.malloc_value(/* ne == native endian */ &ptr_as_u8_stream, MiriMemoryKind::CInternal(ptr_id))?;
                     this.write_pointer(res, dest)?;
+                    // store the relationship between the MIRI pointer and the pointer_id in the internal map
+                    // note: this might change, if we need to reallocate the memory
+                    this.machine.foreign_items.borrow_mut().add_MIRI_pointer_to_C_pointer(res, ptr_id);
                     return Ok(());
                     },
                 _ => {
@@ -1088,6 +1127,8 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }
             }
         }
+
+        self.sync_C_to_miri();
         // TODO don't reload the function every time
         // but it seems the pointer does not persist across the unsafe boundary? 
 
