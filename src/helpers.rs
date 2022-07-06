@@ -765,10 +765,12 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         for (ptr_id, cptr) in c_mems {
             unsafe {
                 match cptr {
+                    // TODO ellen! read the buffer_size from mem
                     CPointerWrapper::Mutable(MutableCPointerWrapper::I32(rptr), buffer_size) => {
                         // read the value from the pointer and store it in mem
-                        let c_i32 = *rptr;
-                        this.malloc_value(/* ne == native endian */ &c_i32.to_ne_bytes(), MiriMemoryKind::CInternal(ptr_id))?;
+                        let c_i32 = std::slice::from_raw_parts_mut(rptr, buffer_size); 
+                        let ptr_as_u8_stream = c_i32.iter().flat_map(|val| val.to_ne_bytes()).collect::<Vec<u8>>();
+                        this.malloc_value(/* ne == native endian */ &ptr_as_u8_stream, MiriMemoryKind::CInternal(ptr_id))?;
                         println!("READING FROM C AGAIN: {:?}", c_i32);
                     },
                     _ => {}
