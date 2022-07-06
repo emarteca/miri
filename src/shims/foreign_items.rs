@@ -163,7 +163,7 @@ impl<'hir> ExternalCFuncDeclRep<'hir> {
 // TODO ellen! add const
 /// Internal C pointer wrapper -- will deal with syncing between C and Rust
 pub enum CPointerWrapper {
-    Mutable(MutableCPointerWrapper),
+    Mutable(MutableCPointerWrapper, usize),
 }
 
 // TODO ellen! add other types
@@ -179,47 +179,6 @@ pub enum MutableCPointerWrapper {
 // pub enum ConstCPointerWrapper {
     
 // }
-
-// TODO ellen!
-impl CPointerWrapper {
-    pub fn sync_miri_to_C(&self) {
-
-    }
-
-    pub fn sync_C_to_miri(&self, alloc_id: AllocId) {
-        match self {
-            CPointerWrapper::Mutable(mut_ptr) => {
-                mut_ptr.sync_C_to_miri(alloc_id)
-            },
-            _ => {
-                panic!("Shouldn't happen -- we've so far only implemented MutableCPointerWrapper for i32s");
-            }
-        }
-    }
-}
-
-impl MutableCPointerWrapper {
-    pub fn sync_miri_to_C(&self) {
-
-    }
-
-    pub fn sync_C_to_miri(&self, alloc_id: AllocId) {
-        match self {
-            MutableCPointerWrapper::I32(c_ptr) => {
-                unsafe {
-                    let value = **c_ptr;
-                    let miri_ptr = Pointer::from(alloc_id);
-                    // let res = this.malloc_value(/* ne == native endian */ &c_i32.to_ne_bytes(), MiriMemoryKind::CInternal(ptr_id))?;
-                    
-                    println!("value: {:?}", value);
-                }
-            },
-            _ => {
-                panic!("Shouldn't happen -- we've so far only implemented MutableCPointerWrapper for i32s");
-            }
-        }
-    }
-}
 
 impl<'mir, 'tcx: 'mir> EvalContextExt<'mir, 'tcx> for crate::MiriEvalContext<'mir, 'tcx> {}
 pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx> {

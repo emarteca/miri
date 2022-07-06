@@ -765,7 +765,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         for (ptr_id, cptr) in c_mems {
             unsafe {
                 match cptr {
-                    CPointerWrapper::Mutable(MutableCPointerWrapper::I32(rptr)) => {
+                    CPointerWrapper::Mutable(MutableCPointerWrapper::I32(rptr), buffer_size) => {
                         // read the value from the pointer and store it in mem
                         let c_i32 = *rptr;
                         this.malloc_value(/* ne == native endian */ &c_i32.to_ne_bytes(), MiriMemoryKind::CInternal(ptr_id))?;
@@ -1070,11 +1070,14 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     },..),..
                 }) => {
                     let ret_ptr = call::<*mut i32>(ptr, &libffi_args.as_slice());
-                    let ret_ptr_internal_wrapper = CPointerWrapper::Mutable(MutableCPointerWrapper::I32(ret_ptr));
+                    let buffer_size = 1; // TODO ellen! get this from C, maybe instrumented malloc
+                    let ret_ptr_internal_wrapper = CPointerWrapper::Mutable(MutableCPointerWrapper::I32(ret_ptr), buffer_size);
                     let ptr_id = this.machine.foreign_items.borrow_mut().add_internal_C_pointer_wrapper(ret_ptr_internal_wrapper);
-                    // read the value from the pointer and store it in mem
-                    let c_i32 = *ret_ptr;
-                    let res = this.malloc_value(/* ne == native endian */ &c_i32.to_ne_bytes(), MiriMemoryKind::CInternal(ptr_id))?;
+                    // read the value from the pointer, for the specified buffer size
+                    // and store it in mem
+                    let c_i32 = std::slice::from_raw_parts_mut(ret_ptr, buffer_size); 
+                    let ptr_as_u8_stream = c_i32.iter().flat_map(|val| val.to_ne_bytes()).collect::<Vec<u8>>();
+                    let res = this.malloc_value(/* ne == native endian */ &ptr_as_u8_stream, MiriMemoryKind::CInternal(ptr_id))?;
                     this.write_pointer(res, dest)?;
                     return Ok(());
                     },
