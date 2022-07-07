@@ -134,6 +134,7 @@ pub type GlobalState = RefCell<GlobalStateInner>;
 /// Arguments to external C functions
 pub enum CArg {
     INVALID,
+    // primitives
     Int8(i8),
     Int16(i16),
     Int32(i32),
@@ -144,6 +145,24 @@ pub enum CArg {
     UInt64(u64),
     Float32(IeeeFloat<SingleS>),
     Float64(IeeeFloat<DoubleS>),
+    // mutable pointers
+    MutPtrInt8(*mut i8),
+    MutPtrInt16(*mut i16),
+    MutPtrInt32(*mut i32),
+    MutPtrInt64(*mut i64),
+    MutPtrUInt8(*mut u8),
+    MutPtrUInt16(*mut u16),
+    MutPtrUInt32(*mut u32),
+    MutPtrUInt64(*mut u64),
+    // const pointers
+    ConstPtrInt8(*mut i8),
+    ConstPtrInt16(*mut i16),
+    ConstPtrInt32(*mut i32),
+    ConstPtrInt64(*mut i64),
+    ConstPtrUInt8(*mut u8),
+    ConstPtrUInt16(*mut u16),
+    ConstPtrUInt32(*mut u32),
+    ConstPtrUInt64(*mut u64),
 }
 
 impl<'hir> ExternalCFuncDeclRep<'hir> {

@@ -775,7 +775,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                         // this is the same pointer as before, with the same buffer size
                         // so let's just overwrite the old pointer 
                         this.write_bytes_ptr((*miri_ptr).into(), ptr_as_u8_stream)?;
-                        println!("SYNCING FROM C: {:?}", c_i32);
+                        // println!("SYNCING FROM C: {:?}", c_i32);
                     },
                     _ => {}
                 }
@@ -799,15 +799,15 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     CPointerWrapper::Mutable(MutableCPointerWrapper::I32(rptr), buffer_size) => {
                         // read the value from the MIRI pointer and store it in C mem
                         let miri_ptr = miri_ptrs_to_c_ptrs.get_by_right(&ptr_id).unwrap();
-                        let ptr_as_u8_stream = this.read_bytes_ptr((*miri_ptr).into(), Size::from_bytes(buffer_size))?;
+                        let ptr_as_u8_stream = this.read_bytes_ptr((*miri_ptr).into(), Size::from_bytes(buffer_size*4))?;
                         
-                        for i in 0..(buffer_size%4) as usize {
+                        for i in 0..(buffer_size) as usize {
                             let mut cur_i32: [u8;4] = Default::default();
                             cur_i32.copy_from_slice(&ptr_as_u8_stream[i*4..(i+1)*4]);
                             std::ptr::write(rptr.offset(i as isize), i32::from_ne_bytes(cur_i32));
                         }
                         
-                        println!("SYNCING TO C: {:?}", ptr_as_u8_stream);
+                        // println!("SYNCING TO C: {:?}", ptr_as_u8_stream);
                     },
                     _ => {}
                 }
@@ -827,10 +827,12 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         let link_name = external_fct_defn.link_name;
         use std::ops::Deref;
 
+        let c_mems = this.machine.foreign_items.borrow().get_internal_C_pointer_wrappers();
+        let miri_ptrs_to_c_ptrs = this.machine.foreign_items.borrow().get_MIRI_pointers_to_C_pointers();
+
         // get the function arguments
         let mut libffi_args = Vec::<(Box<dyn Any>, CArg)>::with_capacity(args.len());
         for (cur_arg, arg_type) in args.iter().zip(external_fct_defn.inputs_types.iter()) {
-            // let arg_ptr = this.read_pointer(cur_arg);
             match this.read_scalar(cur_arg) {
                 Ok(k) => {
                     // the ints
@@ -919,16 +921,45 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     }) = (k.to_f64(), arg_type) {
                             libffi_args.push((Box::new(v), CArg::Float64(v)));
                             throw_unsup_format!("Unsupported argument type -- FLOAT64 -- to external C function: {:?}", cur_arg);
+                    } else if let (ScalarMaybeUninit::Scalar(Scalar::Ptr(v, _)), &hir::Ty{
+                        hir_id:_, kind: hir::TyKind::Ptr(
+                            hir::MutTy{
+                                ty: &hir::Ty{
+                                hir_id:_, kind: hir::TyKind::Path(
+                                    hir::QPath::Resolved(_, hir::Path { 
+                                        span: _, 
+                                        res: hir::def::Res::PrimTy(hir::PrimTy::Int(IntTy::I32)), ..
+                                    },..)
+                                ), ..
+                            },..
+                        },..),..
+                    }) = (k, arg_type) {
+                        // println!("REEEE: {:?}, {:?}", v, arg_type);
+
+                        // let's try and get the pointer out of the C map
+                        let ptr_id = match miri_ptrs_to_c_ptrs.get_by_left(&v.into()) {
+                            Some(id) => id,
+                            None => throw_unsup_format!("Not yet supporting passing Rust (MIRI) pointers to C"),
+                        };
+                        match c_mems.get(ptr_id) {
+                            Some(CPointerWrapper::Mutable(MutableCPointerWrapper::I32(c_ptr), _)) => {
+                                libffi_args.push((Box::new(c_ptr.clone()), CArg::MutPtrInt32(*c_ptr)));
+                            },
+                            _ => {
+                                throw_unsup_format!("Pointer missing or has unexpected type in c internal mem map");
+                            }
+                        }
                     } else {
                         libffi_args.push((Box::new(()), CArg::INVALID));
                         throw_unsup_format!("Unsupported scalar argument type to external C function: {:?}", cur_arg);
                     }
+                    continue;
                 },
-                _ => {
-                    libffi_args.push((Box::new(()), CArg::INVALID));
-                    throw_unsup_format!("Unsupported argument type to external C function: {:?}", cur_arg);
-                }
+                _ => { }
             }
+
+            libffi_args.push((Box::new(()), CArg::INVALID));
+            throw_unsup_format!("Unsupported argument type to external C function: {:?}", cur_arg);
         }
 
         let libffi_args = libffi_args.iter()
@@ -957,6 +988,10 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     },
                     (boxed, CArg::UInt64(_)) => {
                         arg(&(*boxed.downcast_ref::<u64>().unwrap()))
+                    },
+                    // TODO ellen! add the rest of the pointer arg types
+                    (boxed, CArg::MutPtrInt32(_)) => {
+                        arg(&(*boxed.downcast_ref::<*mut i32>().unwrap()))
                     },
                     _ => {
                         // should be unreachable
@@ -995,7 +1030,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     let x = call::<i8>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
-                    return Ok(());
                 },
                 hir::FnRetTy::Return(&hir::Ty{
                     hir_id:_, kind: hir::TyKind::Path(
@@ -1006,7 +1040,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     let x = call::<i16>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
-                    return Ok(());
                 },
                 hir::FnRetTy::Return(&hir::Ty{
                     hir_id:_, kind: hir::TyKind::Path(
@@ -1017,7 +1050,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     let x = call::<i32>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
-                    return Ok(());
                 },
                 hir::FnRetTy::Return(&hir::Ty{
                     hir_id:_, kind: hir::TyKind::Path(
@@ -1028,7 +1060,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     let x = call::<i64>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
-                    return Ok(());
                 },
                 // uints
                 hir::FnRetTy::Return(&hir::Ty{
@@ -1040,7 +1071,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     let x = call::<u8>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
-                    return Ok(());
                 },
                 hir::FnRetTy::Return(&hir::Ty{
                     hir_id:_, kind: hir::TyKind::Path(
@@ -1051,7 +1081,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     let x = call::<u16>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
-                    return Ok(());
                 },
                 hir::FnRetTy::Return(&hir::Ty{
                     hir_id:_, kind: hir::TyKind::Path(
@@ -1062,7 +1091,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     let x = call::<u32>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
-                    return Ok(());
                 },
                 hir::FnRetTy::Return(&hir::Ty{
                     hir_id:_, kind: hir::TyKind::Path(
@@ -1073,7 +1101,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 }) => {
                     let x = call::<u64>(ptr, &libffi_args.as_slice());
                     this.write_int(x, dest)?;
-                    return Ok(());
                 },
                 // TODO ellen! deal with all the other int return types
                 // UH OH FLOATSSSS
@@ -1090,7 +1117,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                 // },
                 hir::FnRetTy::DefaultReturn(_) => {
                     call::<()>(ptr, &libffi_args.as_slice());
-                    return Ok(());
                 },
                 // pointers!
                 // TODO! right now only int32
@@ -1108,7 +1134,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     },..),..
                 }) => {
                     let ret_ptr = call::<*mut i32>(ptr, &libffi_args.as_slice());
-                    let buffer_size = 4; // TODO ellen! get this from C, maybe instrumented malloc
+                    let buffer_size = 1; // TODO ellen! get this from C, maybe instrumented malloc
                     let mut ret_ptr_internal_wrapper = CPointerWrapper::Mutable(MutableCPointerWrapper::I32(ret_ptr), buffer_size);
                     let ptr_id = this.machine.foreign_items.borrow_mut().add_internal_C_pointer_wrapper(ret_ptr_internal_wrapper);
                     // read the value from the pointer, for the specified buffer size
@@ -1120,7 +1146,6 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
                     // store the relationship between the MIRI pointer and the pointer_id in the internal map
                     // note: this might change, if we need to reallocate the memory
                     this.machine.foreign_items.borrow_mut().add_MIRI_pointer_to_C_pointer(res, ptr_id);
-                    return Ok(());
                     },
                 _ => {
                     throw_unsup_format!("UNSUPPORTED RETURN TYPE -- NOT VOID");
@@ -1129,6 +1154,7 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriEvalContextExt<'mir, 'tcx
         }
 
         self.sync_C_to_miri();
+        Ok(())
         // TODO don't reload the function every time
         // but it seems the pointer does not persist across the unsafe boundary? 
 

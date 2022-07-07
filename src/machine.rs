@@ -792,7 +792,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
             let key = foreign_items.get_internal_C_ptr_key();
             let ptr_rep = machine.foreign_items.borrow().get_internal_C_pointer_wrapper(key).unwrap();
             // ptr_rep.sync_C_to_miri(alloc_id, machine);
-            println!("oh hello -- reading: {:?}", Pointer::from(alloc_id));
+            // println!("oh hello -- reading: {:?}", Pointer::from(alloc_id));
             // read the pointer to get the location of the actual C pointer in the machine map
             // let ptr = this.read_pointer(ptr)?;
         }
@@ -823,7 +823,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         range: AllocRange,
     ) -> InterpResult<'tcx> {
         if let Some(foreign_items) = &alloc_extra.foreign_items {
-            println!("oh hello -- writing");
+            // println!("oh hello -- writing");
         }
         if let Some(data_race) = &mut alloc_extra.data_race {
             data_race.write(alloc_id, range, machine.data_race.as_mut().unwrap())?;

@@ -4,6 +4,7 @@ extern "C" {
         fn get_dbl(x: i32) -> f64;
         fn test_stack_spill(a:i32, b:i32, c:i32, d:i32, e:i32, f:i32, g:i32, h:i32, i:i32, j:i32, k:i32, l:i32) -> i32;
         fn pointer_test() -> *mut i32;
+        fn ptr_printer(x: *mut i32);
 }
 
 //extern "C" { pub fn get_num () -> :: std :: os :: raw :: c_int ; }
@@ -22,9 +23,16 @@ fn main() {
                     println!("{}", y);
 
                     let ptr = pointer_test();
-                    println!("{:?}", *ptr);
                     
-                    let ptr2 = pointer_test();
+                    ptr_printer(ptr);
+                    println!("In Rust this pointer has value: {:?}", *ptr);
+
+                    *ptr = 10;
+                    ptr_printer(ptr);
+                    println!("In Rust this pointer has value: {:?}", *ptr);
+
+                    //let ptr2 = pointer_test();
+                    //println!("{:?}, {:?}", *ptr, *ptr2);
         }
         println!("x: {:?}", x);
         println!("rjeiworjweio");

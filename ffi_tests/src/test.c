@@ -11,6 +11,10 @@ int* pointer_test() {
       return point;
 }
 
+void ptr_printer(int *x) {
+  printf("pointer has value: %d\n", *x);
+}
+
 double get_dbl(int x) {
   return 2.75 + x;
 }
