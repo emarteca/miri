@@ -17,8 +17,8 @@ fn main() {
             let mut z = (&mut y) as *mut i32;
             let mut z = &mut z;
             println!("{:?}, {:?}, {:?}", z, *z, **z);
-            println!("as **i32 in rust: {:?}", (z as *mut *mut i32));
-             println!("as **i32 in rust: {:?}", **(z as *mut *mut i32));
+            //println!("as **i32 in rust: {:?}", (z as *mut *mut i32));
+            // println!("as **i32 in rust: {:?}", **(z as *mut *mut i32));
             ddref_print(z as *mut *mut i32);
                 /*
                     //println!("{}", get_num());

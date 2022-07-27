@@ -689,11 +689,16 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
         id: AllocId,
         alloc: Cow<'b, Allocation>,
         kind: Option<MemoryKind<Self::MemoryKind>>,
-    ) -> InterpResult<'tcx, Cow<'b, Allocation<Self::Provenance, Self::AllocExtra>>> {
+        adjust_alloc_id: bool,
+    ) -> InterpResult<'tcx, (Cow<'b, Allocation<Self::Provenance, Self::AllocExtra>>, AllocId)> {
         let size = alloc.size();
         let alloc_range = AllocRange{ start: rustc_target::abi::Size::ZERO, size: size};
         let alloc_bytes_ptr = alloc.get_bytes_with_uninit_and_ptr(ecx, alloc_range).unwrap().as_ptr();
- 
+        // let adjust_alloc_id = false;
+        let old_id = id;
+        let id = if adjust_alloc_id { AllocId(std::num::NonZeroU64::new(alloc_bytes_ptr as u64).unwrap())} else {id};
+        println!("{:?} becomes {:?} -- {:?}", old_id, id, alloc);
+
         let kind = kind.expect("we set our STATIC_KIND so this cannot be None");
         if ecx.machine.tracked_alloc_ids.contains(&id) {
             register_diagnostic(NonHaltingDiagnostic::CreatedAlloc(
@@ -733,7 +738,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
             },
             |ptr| ecx.global_base_pointer(ptr),
         )?;
-        Ok(Cow::Owned(alloc))
+        Ok((Cow::Owned(alloc), id))
     }
 
     fn adjust_alloc_base_pointer(

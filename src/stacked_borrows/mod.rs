@@ -529,6 +529,7 @@ impl<'tcx> Stack {
         exposed_tags: &FxHashSet<SbTag>,
         threads: &ThreadManager<'_, 'tcx>,
     ) -> InterpResult<'tcx> {
+        println!("SOMETHING IS BROKEN: {:?}", alloc_id);
         // Figure out which access `perm` corresponds to.
         let access =
             if new.perm().grants(AccessKind::Write) { AccessKind::Write } else { AccessKind::Read };
