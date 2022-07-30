@@ -444,6 +444,7 @@ dependencies = [
  "rand",
  "regex",
  "rustc-workspace-hack",
+ "scudo",
  "shell-escape",
  "smallvec",
  "ui_test",
@@ -659,6 +660,26 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
+name = "scudo"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a043122e575636c0e47121917446b4f40803fc6defd8797369e7d2d47086d8e3"
+dependencies = [
+ "libc",
+ "scudo-sys",
+]
+
+[[package]]
+name = "scudo-sys"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7aedac72a22df5e73d23abf6b26a9b124a3e10f0e5cc74b9aa8121c7e14cf106"
+dependencies = [
+ "cc",
+ "libc",
+]
 
 [[package]]
 name = "semver"

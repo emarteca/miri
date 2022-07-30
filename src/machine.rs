@@ -526,6 +526,45 @@ impl<'mir, 'tcx> MiriEvalContextExt<'mir, 'tcx> for MiriEvalContext<'mir, 'tcx> 
     }
 }
 
+#[derive(Clone)]
+pub struct CustomAllocator {
+    allocator: scudo::GlobalScudoAllocator,
+}
+
+impl std::fmt::Debug for CustomAllocator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CustomAllocator: scudo")
+    }
+}
+
+unsafe impl core::alloc::GlobalAlloc for CustomAllocator {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        self.allocator.alloc(layout)
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
+        self.allocator.dealloc(ptr, layout)
+    }
+}
+
+use core::alloc::AllocError;
+use core::ptr::NonNull;
+unsafe impl core::alloc::Allocator for CustomAllocator {
+    fn allocate(&self, layout: core::alloc::Layout) -> Result<NonNull<[u8]>, AllocError> {
+        self.allocator.allocate(layout)
+    }
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: core::alloc::Layout) {
+        self.allocator.deallocate(ptr, layout)
+    }
+}
+
+impl Default for CustomAllocator {
+    fn default() -> Self {
+        Self {
+            allocator: scudo::GlobalScudoAllocator,
+        }
+    }
+}
+
 /// Machine hook implementations.
 impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
     type MemoryKind = MiriMemoryKind;
@@ -537,9 +576,11 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
     type Provenance = Provenance;
     type ProvenanceExtra = ProvenanceExtra;
 
+    type CustomAllocator = CustomAllocator;
+
     type MemoryMap = MonoHashMap<
         AllocId,
-        (MemoryKind<MiriMemoryKind>, Allocation<Provenance, Self::AllocExtra>),
+        (MemoryKind<MiriMemoryKind>, Allocation<Provenance, Self::AllocExtra, Self::CustomAllocator>),
     >;
 
     const GLOBAL_KIND: Option<MiriMemoryKind> = Some(MiriMemoryKind::Global);
@@ -687,10 +728,10 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
     fn adjust_allocation<'b>(
         ecx: &MiriEvalContext<'mir, 'tcx>,
         id: AllocId,
-        alloc: Cow<'b, Allocation>,
+        alloc: Cow<'b, Allocation<AllocId, (), Self::CustomAllocator>>,
         kind: Option<MemoryKind<Self::MemoryKind>>,
         adjust_alloc_id: bool,
-    ) -> InterpResult<'tcx, (Cow<'b, Allocation<Self::Provenance, Self::AllocExtra>>, AllocId)> {
+    ) -> InterpResult<'tcx, (Cow<'b, Allocation<Self::Provenance, Self::AllocExtra, Self::CustomAllocator>>, AllocId)> {
         let size = alloc.size();
         let alloc_range = AllocRange{ start: rustc_target::abi::Size::ZERO, size: size};
         let alloc_bytes_ptr = alloc.get_bytes_with_uninit_and_ptr(ecx, alloc_range).unwrap().as_ptr();
@@ -728,7 +769,7 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for Evaluator<'mir, 'tcx> {
             )
         });
         let buffer_alloc = ecx.machine.weak_memory.then(weak_memory::AllocExtra::new_allocation);
-        let alloc: Allocation<Provenance, Self::AllocExtra> = alloc.adjust_from_tcx(
+        let alloc: Allocation<Provenance, Self::AllocExtra, Self::CustomAllocator> = alloc.adjust_from_tcx(
             &ecx.tcx,
             AllocExtra {
                 stacked_borrows: stacks.map(RefCell::new),
